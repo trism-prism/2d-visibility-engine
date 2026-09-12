@@ -1,0 +1,12 @@
+build/
+out/
+*.bmp
+*.log
+*.png
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+CMakeUserPresets.json
+imgui.ini
