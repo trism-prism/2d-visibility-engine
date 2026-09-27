@@ -36,41 +36,6 @@ float distToSegmentPx(ImVec2 p, ImVec2 a, ImVec2 b) {
     return std::sqrt(cx * cx + cy * cy);
 }
 
-double distToSegment(Vec2 p, const vis::Segment& s) {
-    const Vec2 e = s.b - s.a;
-    const double l2 = vis::dot(e, e);
-    double t = l2 > 0.0 ? vis::dot(p - s.a, e) / l2 : 0.0;
-    t = std::clamp(t, 0.0, 1.0);
-    return vis::length(p - (s.a + e * t));
-}
-
-// Deterministic search outward from `preferred` for a point at least `clearance` away from every
-// user wall, so the light never starts on top of a wall.
-Vec2 findOpenPoint(const vis::Scene& scene, Vec2 preferred, double clearance) {
-    const auto open = [&](Vec2 p) {
-        if (p.x < 0 || p.y < 0 || p.x > scene.width() || p.y > scene.height()) return false;
-        for (std::size_t i = vis::Scene::kBoundaryWalls; i < scene.walls().size(); ++i)
-            if (distToSegment(p, scene.walls()[i]) < clearance) return false;
-        return true;
-    };
-    if (open(preferred)) return preferred;
-    const double step = clearance;
-    for (int ring = 1; ring < 400; ++ring) {
-        const int steps = 8 * ring;
-        for (int k = 0; k < steps; ++k) {
-            // square ring, no trigonometry: deterministic everywhere
-            const double f = static_cast<double>(k) / steps * 4.0;
-            const int side = static_cast<int>(f);
-            const double u = (f - side) * 2.0 - 1.0;
-            const double r = ring * step;
-            Vec2 off = side == 0 ? Vec2{r, u * r} : side == 1 ? Vec2{-u * r, r} : side == 2 ? Vec2{-r, -u * r} : Vec2{u * r, -r};
-            const Vec2 p = preferred + off;
-            if (open(p)) return p;
-        }
-    }
-    return preferred;
-}
-
 std::uint64_t fnv(const std::vector<Vec2>& poly) {
     std::uint64_t h = 1469598103934665603ull;
     for (Vec2 v : poly)
@@ -133,7 +98,7 @@ void App::loadScene(vis::SceneKind k) {
             c = c * (1.0 / static_cast<double>(scene.userWallCount()));
             preferred = {std::clamp(c.x - 380.0, 40.0, scene.width() - 40.0), c.y};
         }
-        light = findOpenPoint(scene, preferred, 8.0);
+        light = vis::chooseLight(scene, preferred);
     }
     if (!autoGrid) scene.setGridResolution(gridCols, gridRows);
     sceneChanged();

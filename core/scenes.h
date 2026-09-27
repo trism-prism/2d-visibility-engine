@@ -41,4 +41,10 @@ Scene makeLongWallsScene(int wallCount, std::uint64_t seed);  // two near-parall
 Scene makeClusterScene(int wallCount, std::uint64_t seed);    // everything inside a few cells: grid-hostile
 Scene makeScene(SceneKind kind, int wallCount, std::uint64_t seed);  // Demo ignores the arguments
 
+// Deterministic light placement for a loaded scene: among a 7 x 7 lattice of candidates (spacing 70)
+// around `preferred`, those inside the world and at least 8 units from every user wall, the one whose
+// visibility polygon (real Grid query) has the largest area, so the scene opens with a meaningful lit
+// region. Ties go to the earliest candidate; `preferred` itself is candidate 0.
+Vec2 chooseLight(const Scene& scene, Vec2 preferred);
+
 }  // namespace vis
