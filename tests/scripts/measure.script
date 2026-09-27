@@ -1,0 +1,18 @@
+# Live-app measurements at n = 1000 for each stress scene, both back ends (Compare on).
+# Query numbers are medians of the last <= 60 real timed queries per back end.
+set compare on
+set walls 1000
+set seed 1
+key 1
+wait 14
+print scene walls k T rays median_us_brute median_us_grid tests_brute tests_grid rebuild_grid_us rebuild_isect_us identical
+key 2
+wait 14
+print scene walls k T rays median_us_brute median_us_grid tests_brute tests_grid rebuild_grid_us rebuild_isect_us identical
+key 3
+wait 14
+print scene walls k T rays median_us_brute median_us_grid tests_brute tests_grid rebuild_grid_us rebuild_isect_us identical
+key 4
+wait 14
+print scene walls k T rays median_us_brute median_us_grid tests_brute tests_grid rebuild_grid_us rebuild_isect_us identical
+quit

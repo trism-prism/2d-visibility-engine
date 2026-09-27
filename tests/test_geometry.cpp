@@ -335,3 +335,44 @@ TEST_CASE("generators: long-walls crossing count stays far below n^2/4 at n = 10
         CHECK(k <= 30.0 * 1000);
     }
 }
+
+// Regression: a wall that is exactly on opposite sides of the ray (orient) but so nearly end-on that
+// the rounded denominator cross(d, B-A) is exactly 0. The quotient is infinite; the hit must still
+// count (dropping it leaks light through the wall). Found by a randomised search; values are bitwise.
+TEST_CASE("rayHit: nearly end-on wall with a vanishing rounded denominator still blocks") {
+    const Vec2 L{0, 0};
+    const Vec2 P{1.3715276107210816, 1.0912061404184703};
+    const Vec2 A{1.5697301290945569, 1.2488987770120796};
+    const Vec2 B{3.430983033521001, 2.7297370644119541};
+    REQUIRE(orient(L, P, A) * orient(L, P, B) == -1);  // exact: strictly opposite sides
+    REQUIRE(cross(P - L, B - A) == 0.0);               // rounded: the denominator vanishes
+
+    Hit h;
+    rayHit(makeRay(L, P), {A, B}, h.tMinus, h.tPlus);
+    CHECK(std::isfinite(h.tMinus));
+    CHECK(std::isfinite(h.tPlus));
+    CHECK(h.tMinus == h.tPlus);
+    CHECK(h.tMinus >= 1.1445);  // A is at t = 1.1445 along the ray, B at 2.5016
+    CHECK(h.tMinus <= 2.502);
+
+    // and through the whole query, in both modes: the ray through P must stop at the wall, not
+    // run on to the world boundary (t = 2.92)
+    Scene s(4, 4);
+    REQUIRE(s.addWall(A, B) == AddStatus::Added);
+    REQUIRE(s.addWall(P, {P.x + 0.5, P.y - 0.3}) == AddStatus::Added);
+    for (Mode mode : {Mode::Brute, Mode::Grid}) {
+        VisibilityResult r;
+        Trace trace;
+        computeVisibility(s, L, mode, r, &trace);
+        bool seen = false;
+        for (const Trace::RayRecord& ray : trace.rays) {
+            if (ray.target != P) continue;
+            seen = true;
+            // the second wall starts at P (t = 1) on one side; the other side must hit wall A-B
+            const double far = std::max(ray.tMinus, ray.tPlus);
+            CHECK(std::isfinite(far));
+            CHECK(far <= 2.502);
+        }
+        CHECK(seen);
+    }
+}
