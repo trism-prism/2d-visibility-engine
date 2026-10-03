@@ -22,7 +22,9 @@ struct VisibilityStats {
 };
 
 // Filled from the real query code. Flat storage: ray r owns cells[cellBegin, cellEnd) (in visiting
-// order) and walls[wallBegin, wallEnd) (in testing order).
+// order) and walls[wallBegin, wallEnd) (in testing order). In Brute mode every ray tests every wall,
+// so no per-ray lists are stored (they would be T * n entries): `allWallsTested` is set instead and
+// the ranges are empty.
 struct Trace {
     struct RayRecord {
         Vec2 target;  // the target this ray was built for
@@ -34,11 +36,13 @@ struct Trace {
     };
     Vec2 light;
     Mode mode = Mode::Grid;
+    bool allWallsTested = false;  // true for Brute: wall lists are not recorded
     std::vector<RayRecord> rays;
     std::vector<std::uint32_t> cells;
     std::vector<std::uint32_t> walls;
     std::vector<std::uint32_t> cellVisits;  // per grid cell: how many rays walked it
     void clear() {
+        allWallsTested = false;
         rays.clear();
         cells.clear();
         walls.clear();

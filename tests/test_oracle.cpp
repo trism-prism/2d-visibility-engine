@@ -202,3 +202,46 @@ TEST_CASE("oracle: decimal and non-dyadic lattices (grid snap 0.1, spacing 1600/
     CHECK(lightsUsed > scaled(500));
     CHECK(compared > scaled(scaled(100000)));
 }
+
+// The area tolerance of the sampling test lets a thin wrong sliver through. This test probes the
+// polygon boundary itself: for each polygon edge (not radial, not shorter than a few offsets) take
+// the edge midpoint and test the points `off` to either side of it against the independent
+// segment-crossing predicate. `off` is 1e-4 on the 1600-wide world and proportional elsewhere: far
+// above the rounding of vertices (about 1e-13) and of the predicate, far below any feature of the test
+// scenes (walls and gaps are at least about 1 unit). Probes that lie within off/2 of a different edge
+// (a neighbouring sliver) are skipped, because there "which edge am I near" is the question.
+TEST_CASE("oracle: points just inside and just outside every polygon edge agree with the predicate") {
+    long long edgesTested = 0, probes = 0, skipped = 0;
+    for (const OracleCase& c : makeCases(0xED6E0000, scaled(100))) {
+        const double off = 1e-4 * std::max(c.scene.width(), c.scene.height()) / 1600.0;
+        for (Vec2 light : c.lights) {
+            const Poly poly = query(c.scene, light, Mode::Grid);
+            const std::size_t n = poly.size();
+            for (std::size_t i = 0; i < n; ++i) {
+                const Vec2 a = poly[i], b = poly[(i + 1) % n];
+                const Vec2 e = b - a;
+                const double len = std::sqrt(e.x * e.x + e.y * e.y);
+                if (len < 4 * off) continue;
+                const Vec2 la = a - light, lb = b - light;
+                const double ra = std::sqrt(la.x * la.x + la.y * la.y), rb = std::sqrt(lb.x * lb.x + lb.y * lb.y);
+                if (ra == 0.0 || rb == 0.0) continue;
+                if (std::fabs(la.x * lb.y - la.y * lb.x) <= 1e-9 * ra * rb) continue;  // radial edge
+                ++edgesTested;
+                const Vec2 mid = a + e * 0.5;
+                const Vec2 normal{-e.y / len, e.x / len};
+                for (double side : {-1.0, 1.0}) {
+                    const Vec2 q = mid + normal * (side * off);
+                    if (distToBoundary(poly, q) < 0.5 * off) { ++skipped; continue; }
+                    ++probes;
+                    const bool lit = litByDefinition(c.scene, light, q);
+                    const bool in = pointInPolygon(poly, q);
+                    INFO(c.label << " light " << str(light) << " edge " << i << " side " << side << " probe " << str(q));
+                    CHECK(lit == in);
+                }
+            }
+        }
+    }
+    CHECK(edgesTested > scaled(2000));
+    CHECK(probes > scaled(3000));
+    CHECK(skipped < probes);
+}

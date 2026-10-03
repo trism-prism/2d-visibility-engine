@@ -79,11 +79,6 @@ public:
         walls.push_back(s);
         return true;
     }
-    Scene finish() {
-        Scene scene(kStressWidth, kStressHeight);
-        scene.setWalls(walls);
-        return scene;
-    }
     std::vector<Segment> walls;
     Rng rng;
 
@@ -100,8 +95,7 @@ void fill(Collector& c, int target, F&& step) {
 
 }  // namespace
 
-Scene makeDemoScene() {
-    Scene scene(kStressWidth, kStressHeight);
+static std::vector<Segment> demoWalls() {
     std::vector<Segment> w;
     const auto wall = [&](double x0, double y0, double x1, double y1) { w.push_back({{x0, y0}, {x1, y1}}); };
     const auto square = [&](double cx, double cy, double r) {
@@ -154,13 +148,12 @@ Scene makeDemoScene() {
     wall(1200, 650, 1500, 950);
     wall(1200, 950, 1500, 650);
 
-    scene.setWalls(w);
-    return scene;
+    return w;
 }
 
 Vec2 demoLight() { return {610.0, 290.0}; }
 
-Scene makeScatterScene(int wallCount, std::uint64_t seed) {
+static std::vector<Segment> scatterWalls(int wallCount, std::uint64_t seed) {
     Collector c(wallCount, seed);
     fill(c, wallCount, [&] {
         const Vec2 centre{c.rng.range(0, kStressWidth), c.rng.range(0, kStressHeight)};
@@ -168,10 +161,10 @@ Scene makeScatterScene(int wallCount, std::uint64_t seed) {
         const double half = 0.5 * c.rng.range(10.0, 50.0);
         c.add(centre - dir * half, centre + dir * half);
     });
-    return c.finish();
+    return c.walls;
 }
 
-Scene makeMazeScene(int wallCount, std::uint64_t seed) {
+static std::vector<Segment> mazeWalls(int wallCount, std::uint64_t seed) {
     Collector c(wallCount, seed);
     const int diagonals = wallCount >= 20 ? wallCount / 25 : 0;
     const int lattice = wallCount - diagonals;
@@ -236,10 +229,10 @@ Scene makeMazeScene(int wallCount, std::uint64_t seed) {
         const Vec2 dir = c.rng.direction();
         c.add(start, start + dir * c.rng.range(0.15 * kStressWidth, 0.5 * kStressWidth));
     }
-    return c.finish();
+    return c.walls;
 }
 
-Scene makeLongWallsScene(int wallCount, std::uint64_t seed) {
+static std::vector<Segment> longWallsWalls(int wallCount, std::uint64_t seed) {
     Collector c(wallCount, seed);
     // A few near-vertical walls cross the many near-horizontal ones; the slope jitter makes
     // neighbouring near-parallel walls cross each other too. At n = 1000 that is roughly 10-30 n
@@ -263,10 +256,10 @@ Scene makeLongWallsScene(int wallCount, std::uint64_t seed) {
             c.add({x0, y0}, {x1, y1});
         }
     });
-    return c.finish();
+    return c.walls;
 }
 
-Scene makeClusterScene(int wallCount, std::uint64_t seed) {
+static std::vector<Segment> clusterWalls(int wallCount, std::uint64_t seed) {
     Collector c(wallCount, seed);
     // A patch of 5% x 5% of the world: a handful of cells at the default grid resolution.
     const double px = c.rng.range(0.2 * kStressWidth, 0.8 * kStressWidth);
@@ -277,19 +270,35 @@ Scene makeClusterScene(int wallCount, std::uint64_t seed) {
         const Vec2 start{c.rng.range(px - hx, px + hx), c.rng.range(py - hy, py + hy)};
         c.add(start, start + c.rng.direction() * c.rng.range(4.0, 16.0));
     });
-    return c.finish();
+    return c.walls;
 }
 
-Scene makeScene(SceneKind kind, int wallCount, std::uint64_t seed) {
-    switch (kind) {
-        case SceneKind::Demo: return makeDemoScene();
-        case SceneKind::Scatter: return makeScatterScene(wallCount, seed);
-        case SceneKind::Maze: return makeMazeScene(wallCount, seed);
-        case SceneKind::LongWalls: return makeLongWallsScene(wallCount, seed);
-        case SceneKind::Cluster: return makeClusterScene(wallCount, seed);
-    }
-    return Scene(kStressWidth, kStressHeight);
+namespace {
+Scene sceneFrom(const std::vector<Segment>& walls) {
+    Scene s(kStressWidth, kStressHeight);
+    s.setWalls(walls);  // one rebuild
+    return s;
 }
+}  // namespace
+
+Scene makeDemoScene() { return sceneFrom(demoWalls()); }
+Scene makeScatterScene(int wallCount, std::uint64_t seed) { return sceneFrom(scatterWalls(wallCount, seed)); }
+Scene makeMazeScene(int wallCount, std::uint64_t seed) { return sceneFrom(mazeWalls(wallCount, seed)); }
+Scene makeLongWallsScene(int wallCount, std::uint64_t seed) { return sceneFrom(longWallsWalls(wallCount, seed)); }
+Scene makeClusterScene(int wallCount, std::uint64_t seed) { return sceneFrom(clusterWalls(wallCount, seed)); }
+
+std::vector<Segment> makeSceneWalls(SceneKind kind, int wallCount, std::uint64_t seed) {
+    switch (kind) {
+        case SceneKind::Demo: return demoWalls();
+        case SceneKind::Scatter: return scatterWalls(wallCount, seed);
+        case SceneKind::Maze: return mazeWalls(wallCount, seed);
+        case SceneKind::LongWalls: return longWallsWalls(wallCount, seed);
+        case SceneKind::Cluster: return clusterWalls(wallCount, seed);
+    }
+    return {};
+}
+
+Scene makeScene(SceneKind kind, int wallCount, std::uint64_t seed) { return sceneFrom(makeSceneWalls(kind, wallCount, seed)); }
 
 }  // namespace vis
 

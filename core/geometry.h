@@ -8,6 +8,9 @@ namespace vis {
 constexpr double kMinWallLength = 1e-6;     // input validation: shorter clipped walls are rejected
 constexpr double kLightClearance = 1e-9;    // a wall closer than this along a ray does not occlude it
 constexpr double kGridPad = 1e-6;           // conservative cell registration, relative to cell size
+// Input coordinates beyond this magnitude are rejected (differences and products in clipping and the
+// exact predicates would overflow far beyond it).
+constexpr double kMaxCoordinate = 1e150;
 constexpr double kInf = std::numeric_limits<double>::infinity();
 
 struct Vec2 {

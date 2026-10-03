@@ -193,11 +193,12 @@ void drawCanvas(ImDrawList* dl, const App& app) {
     }
     if (haveTrace && app.overlay == Overlay::Probe && app.mode == vis::Mode::Grid) {
         drawGridLines(dl, app, 40);
-        if (app.probeRay >= 0) {
-            const vis::Trace::RayRecord& r = app.trace.rays[static_cast<std::size_t>(app.probeRay)];
+        if (const vis::Trace::RayRecord* pr = app.probe()) {
+            const vis::Trace::RayRecord& r = *pr;
             int order = 0;
             for (std::uint32_t k = r.cellBegin; k < r.cellEnd; ++k, ++order) {
                 const std::uint32_t c = app.trace.cells[k];
+                if (c >= grid.cellCount()) continue;
                 ImVec2 lo, hi;
                 cellRect(app, static_cast<int>(c % static_cast<std::uint32_t>(grid.cols())),
                          static_cast<int>(c / static_cast<std::uint32_t>(grid.cols())), lo, hi);
@@ -215,19 +216,26 @@ void drawCanvas(ImDrawList* dl, const App& app) {
     // ---- walls ----
     const auto& walls = scene.walls();
     std::vector<char> tested;
-    const bool probing = haveTrace && app.overlay == Overlay::Probe && app.probeRay >= 0;
+    const vis::Trace::RayRecord* probeRec = haveTrace && app.overlay == Overlay::Probe ? app.probe() : nullptr;
+    const bool probing = probeRec != nullptr;
     if (probing) {
-        tested.assign(walls.size(), 0);
-        const vis::Trace::RayRecord& r = app.trace.rays[static_cast<std::size_t>(app.probeRay)];
-        for (std::uint32_t k = r.wallBegin; k < r.wallEnd; ++k) tested[app.trace.walls[k]] = 1;
+        // Baseline records no per-ray wall lists: every wall is tested by every ray.
+        tested.assign(walls.size(), app.trace.allWallsTested ? 1 : 0);
+        for (std::uint32_t k = probeRec->wallBegin; k < probeRec->wallEnd; ++k)
+            if (app.trace.walls[k] < tested.size()) tested[app.trace.walls[k]] = 1;
     }
     dl->AddRect(wmin, wmax, IM_COL32(128, 138, 164, 255), 0.0f, 0, 2.0f * ui);
     // Thickness follows the world->screen scale (1-2 px) and is thinner still in dense scenes.
     float wallPx = std::clamp(3.0f * app.view.scale, 1.0f, 2.0f);
     if (scene.userWallCount() > 400) wallPx = std::max(1.0f, wallPx * 0.75f);
     const float wallW = wallPx * ui;
+    // Dense scenes: lower the opacity too (about 250/n above 400 walls, floor 0.12), so overlapping
+    // walls stay distinguishable and the lit region and light handle remain visible underneath/on top.
+    const float density = static_cast<float>(scene.userWallCount());
+    const float wallAlpha = density > 400.0f ? std::clamp(250.0f / density, 0.12f, 1.0f) : 1.0f;
+    const ImU32 wallColour = withAlpha(kWall, static_cast<int>(255.0f * wallAlpha));
     for (std::size_t i = vis::Scene::kBoundaryWalls; i < walls.size(); ++i) {
-        ImU32 col = kWall;
+        ImU32 col = wallColour;
         float w = wallW;
         if (probing) {
             if (tested[i]) { col = kTested; w = wallW * 1.3f; }
@@ -241,7 +249,7 @@ void drawCanvas(ImDrawList* dl, const App& app) {
     if (haveTrace && (app.overlay == Overlay::Rays || (app.overlay == Overlay::Grid && app.mode == vis::Mode::Brute)))
         drawRays(dl, app, lp, app.overlay == Overlay::Rays ? 90 : 70);
     if (probing) {
-        const vis::Trace::RayRecord& r = app.trace.rays[static_cast<std::size_t>(app.probeRay)];
+        const vis::Trace::RayRecord& r = *probeRec;
         const double tFar = std::max(std::isfinite(r.tMinus) ? r.tMinus : 0.0, std::isfinite(r.tPlus) ? r.tPlus : 0.0);
         dl->AddLine(lp, app.view.toScreen(app.light + r.dir * (tFar > 0 ? tFar : 1.0)), IM_COL32(94, 196, 255, 230), 1.6f * ui);
         // Labels sit off to the side of the ray (perpendicular), on a dark backing so they stay
@@ -314,18 +322,20 @@ void drawCanvas(ImDrawList* dl, const App& app) {
             legend(dl, app, lines, 3);
         }
     } else if (app.overlay == Overlay::Probe) {
-        if (app.probeRay < 0 || app.trace.rays.empty()) {
+        const vis::Trace::RayRecord* pr = app.probe();
+        if (!pr) {
             const char* lines[] = {"Overlay: probe ray", "Move the cursor over the canvas."};
             legend(dl, app, lines, 2);
         } else {
-            const vis::Trace::RayRecord& r = app.trace.rays[static_cast<std::size_t>(app.probeRay)];
+            const vis::Trace::RayRecord& r = *pr;
+            const std::size_t testedWalls = app.probeWalls(r);
             char l1[112], l2[112];
             if (app.mode == vis::Mode::Grid) {
-                std::snprintf(l1, sizeof l1, "Probe ray: %u cells walked, %u of %zu walls tested", r.cellEnd - r.cellBegin,
-                              r.wallEnd - r.wallBegin, scene.wallCount());
+                std::snprintf(l1, sizeof l1, "Probe ray: %u cells walked, %zu of %zu walls tested", r.cellEnd - r.cellBegin,
+                              testedWalls, scene.wallCount());
                 std::snprintf(l2, sizeof l2, "Orange: tested walls. Muted: skipped. Cyan cells in visiting order.");
             } else {
-                std::snprintf(l1, sizeof l1, "Probe ray: Baseline tests all %u of %zu walls", r.wallEnd - r.wallBegin,
+                std::snprintf(l1, sizeof l1, "Probe ray: Baseline tests all %zu of %zu walls", testedWalls,
                               scene.wallCount());
                 std::snprintf(l2, sizeof l2, "Orange: every wall is tested. No cells: Baseline has no grid.");
             }
