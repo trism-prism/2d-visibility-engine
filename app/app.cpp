@@ -56,6 +56,7 @@ const char* statusText(vis::AddStatus s) {
         case vis::AddStatus::RejectedNonFinite: return "non-finite coordinates";
         case vis::AddStatus::RejectedOutside: return "entirely outside the world";
         case vis::AddStatus::RejectedTooShort: return "too short (under 1e-6 after clipping)";
+        case vis::AddStatus::RejectedTooLarge: return "coordinate magnitude above 1e150";
     }
     return "?";
 }
@@ -84,11 +85,15 @@ void App::loadScene(vis::SceneKind k) {
     kind = k;
     drawing = false;
     draggingLight = false;
+    // One real rebuild: the grid resolution is set on the (boundary-only) scene first, then the walls
+    // are loaded in a single setWalls call.
+    vis::Scene fresh(vis::kStressWidth, vis::kStressHeight);
+    if (!autoGrid) fresh.setGridResolution(gridCols, gridRows);
+    fresh.setWalls(vis::makeSceneWalls(k, stressWalls, static_cast<std::uint64_t>(seed)));
+    scene = std::move(fresh);
     if (k == vis::SceneKind::Demo) {
-        scene = vis::makeDemoScene();
         light = vis::demoLight();
     } else {
-        scene = vis::makeScene(k, stressWalls, static_cast<std::uint64_t>(seed));
         Vec2 preferred{scene.width() * 0.5, scene.height() * 0.5};
         if (k == vis::SceneKind::Cluster && scene.userWallCount() > 0) {
             // look at the packed patch from a distance
@@ -100,7 +105,6 @@ void App::loadScene(vis::SceneKind k) {
         }
         light = vis::chooseLight(scene, preferred);
     }
-    if (!autoGrid) scene.setGridResolution(gridCols, gridRows);
     sceneChanged();
     if (k == vis::SceneKind::Demo) setStatus("Demo scene loaded", false);
     else setStatus(std::string(vis::sceneKindName(k)) + " scene: " + std::to_string(scene.userWallCount()) +
@@ -201,9 +205,10 @@ void App::handleInput(ImGuiIO& io) {
     hoverWall = -1;
     hoverBoundary = false;
     if (free && !drawing && !draggingLight) {
-        const int w = nearestWall(m, 8.0f * uiScale, false);
-        if (w >= static_cast<int>(vis::Scene::kBoundaryWalls)) hoverWall = w;
-        else if (w >= 0) hoverBoundary = true;
+        // User walls first: one on or next to the world edge must stay deletable.
+        const int w = nearestWall(m, 8.0f * uiScale, true);
+        if (w >= 0) hoverWall = w;
+        else hoverBoundary = nearestWall(m, 8.0f * uiScale, false) >= 0;
     }
 
     if (ImGui::IsMouseClicked(ImGuiMouseButton_Left, false) && free) {
@@ -255,23 +260,37 @@ void App::handleInput(ImGuiIO& io) {
         if (pressed(ImGuiKey_4)) loadScene(vis::SceneKind::Cluster);
         if (pressed(ImGuiKey_Escape)) cancelWall();
     }
+}
 
-    // Probe: the traced ray whose direction is nearest the cursor direction.
+// The probe ray is chosen from the trace that is about to be drawn (after updateVisibility), so a
+// scene change in the same frame can never leave a stale index.
+void App::updateProbe(const ImGuiIO& io) {
     probeRay = -1;
-    if (overlay == Overlay::Probe && !trace.rays.empty()) {
-        const Vec2 dir = view.toWorld(m) - light;
-        if (vis::dot(dir, dir) > 0.0) {
-            double best = 1e9;
-            for (std::size_t i = 0; i < trace.rays.size(); ++i) {
-                const Vec2 d = trace.rays[i].dir;
-                const double a = std::fabs(std::atan2(vis::cross(d, dir), vis::dot(d, dir)));
-                if (a < best) {
-                    best = a;
-                    probeRay = static_cast<int>(i);
-                }
-            }
+    if (overlay != Overlay::Probe || trace.rays.empty()) return;
+    const Vec2 dir = view.toWorld(io.MousePos) - light;
+    if (!(vis::dot(dir, dir) > 0.0)) return;
+    double best = 1e9;
+    for (std::size_t i = 0; i < trace.rays.size(); ++i) {
+        const Vec2 d = trace.rays[i].dir;
+        const double a = std::fabs(std::atan2(vis::cross(d, dir), vis::dot(d, dir)));
+        if (a < best) {
+            best = a;
+            probeRay = static_cast<int>(i);
         }
     }
+}
+
+const vis::Trace::RayRecord* App::probe() const {
+    if (overlay != Overlay::Probe || probeRay < 0 || probeRay >= static_cast<int>(trace.rays.size())) return nullptr;
+    const vis::Trace::RayRecord& r = trace.rays[static_cast<std::size_t>(probeRay)];
+    // Ranges must lie inside the recorded arrays and index real cells / walls.
+    if (r.cellBegin > r.cellEnd || r.cellEnd > trace.cells.size() || r.wallBegin > r.wallEnd || r.wallEnd > trace.walls.size())
+        return nullptr;
+    return &r;
+}
+
+std::size_t App::probeWalls(const vis::Trace::RayRecord& r) const {
+    return trace.allWallsTested ? scene.wallCount() : static_cast<std::size_t>(r.wallEnd - r.wallBegin);
 }
 
 void App::refreshGridInfo() {
@@ -294,17 +313,19 @@ void App::updateVisibility() {
     else --settle;
     dirty = false;
 
-    // Timed passes: nothing but the query itself.
-    vis::computeVisibility(scene, light, mode, result);
-    ModeStats& ms = stats[static_cast<int>(mode)];
-    ms.total.add(result.stats.totalUs);
-    ms.sort.add(result.stats.sortUs);
-    ms.cast.add(result.stats.castUs);
-    ms.last = result.stats;
-    ms.valid = true;
-    haveOther = false;
-    if (compare) {
-        const vis::Mode other = mode == vis::Mode::Grid ? vis::Mode::Brute : vis::Mode::Grid;
+    // Timed passes: nothing but the query itself. With Compare on, the order of the two back ends
+    // alternates between queries so neither always runs on the warmer cache.
+    const vis::Mode other = mode == vis::Mode::Grid ? vis::Mode::Brute : vis::Mode::Grid;
+    const auto runCurrent = [&] {
+        vis::computeVisibility(scene, light, mode, result);
+        ModeStats& ms = stats[static_cast<int>(mode)];
+        ms.total.add(result.stats.totalUs);
+        ms.sort.add(result.stats.sortUs);
+        ms.cast.add(result.stats.castUs);
+        ms.last = result.stats;
+        ms.valid = true;
+    };
+    const auto runOther = [&] {
         vis::computeVisibility(scene, light, other, otherResult);
         ModeStats& os = stats[static_cast<int>(other)];
         os.total.add(otherResult.stats.totalUs);
@@ -312,8 +333,16 @@ void App::updateVisibility() {
         os.cast.add(otherResult.stats.castUs);
         os.last = otherResult.stats;
         os.valid = true;
+    };
+    haveOther = false;
+    if (compare) {
+        compareFlip = !compareFlip;
+        if (compareFlip) { runOther(); runCurrent(); }
+        else { runCurrent(); runOther(); }
         haveOther = true;
         identical = result.polygon == otherResult.polygon;
+    } else {
+        runCurrent();
     }
     polyHash = fnv(result.polygon);
 
@@ -328,6 +357,7 @@ void App::frame(ImGuiIO& io, double time) {
     layout(io.DisplaySize);
     handleInput(io);
     updateVisibility();
+    updateProbe(io);
 }
 
 std::string App::field(const std::string& name) const {
@@ -373,11 +403,11 @@ std::string App::field(const std::string& name) const {
     if (name == "rebuild_grid_us") return num(scene.lastRebuild().gridBuildUs);
     if (name == "rebuild_isect_us") return num(scene.lastRebuild().intersectUs);
     if (name == "probe_cells" || name == "probe_walls" || name == "probe_tminus" || name == "probe_tplus") {
-        if (probeRay < 0 || probeRay >= static_cast<int>(trace.rays.size())) return "none";
-        const vis::Trace::RayRecord& r = trace.rays[static_cast<std::size_t>(probeRay)];
-        if (name == "probe_cells") return std::to_string(r.cellEnd - r.cellBegin);
-        if (name == "probe_walls") return std::to_string(r.wallEnd - r.wallBegin);
-        return num(name == "probe_tminus" ? r.tMinus : r.tPlus);
+        const vis::Trace::RayRecord* r = probe();
+        if (!r) return "none";
+        if (name == "probe_cells") return std::to_string(r->cellEnd - r->cellBegin);
+        if (name == "probe_walls") return std::to_string(probeWalls(*r));
+        return num(name == "probe_tminus" ? r->tMinus : r->tPlus);
     }
     return "?";
 }

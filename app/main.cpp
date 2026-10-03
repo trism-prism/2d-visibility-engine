@@ -153,14 +153,15 @@ int main(int argc, char** argv) {
     if (opt.hasLight) app.setLight({opt.lightX, opt.lightY});
     app.status.clear();
 
+    int exitCode = 0;
     Script script;
     const bool scripted = !opt.scriptPath.empty();
     if (scripted && !script.load(opt.scriptPath)) {
         std::fprintf(stderr, "cannot read script %s\n", opt.scriptPath.c_str());
-        return 2;
+        exitCode = 2;
+        app.wantQuit = true;  // skip the loop and go through the normal shutdown below
     }
 
-    int exitCode = 0;
     int frame = 0;
     while (!glfwWindowShouldClose(window) && !app.wantQuit) {
         glfwPollEvents();
@@ -194,7 +195,9 @@ int main(int argc, char** argv) {
         glfwSwapBuffers(window);
     }
 
-    if (scripted && script.failures > 0) {
+    if (exitCode == 2) {
+        // the script could not be loaded; the message was printed above
+    } else if (scripted && script.failures > 0) {
         std::printf("SCRIPT FAILED: %d failing expectation(s)\n", script.failures);
         exitCode = 1;
     } else if (scripted) {
