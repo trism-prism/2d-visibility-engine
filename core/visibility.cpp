@@ -27,7 +27,6 @@ struct Caster {
         tPlus = kInf;
         if (mode == Mode::Brute) {
             for (std::size_t w = 0; w < walls.size(); ++w) {
-                if (trace) trace->walls.push_back(static_cast<std::uint32_t>(w));
                 rayHit(ray, walls[w], tMinus, tPlus);
             }
             stats.wallTests += walls.size();
@@ -133,6 +132,7 @@ void computeVisibility(const Scene& scene, Vec2 lightIn, Mode mode, VisibilityRe
         trace->clear();
         trace->light = light;
         trace->mode = mode;
+        trace->allWallsTested = mode == Mode::Brute;
         trace->cellVisits.assign(mode == Mode::Grid ? scene.grid().cellCount() : 0, 0u);
         trace->rays.reserve(ctx.rays.size());
     }

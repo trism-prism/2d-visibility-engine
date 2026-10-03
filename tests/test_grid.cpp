@@ -208,13 +208,22 @@ TEST_CASE("trace: on equals off, and the trace describes what the query really d
                         std::set<std::uint32_t> uniq(trace.walls.begin() + r.wallBegin, trace.walls.begin() + r.wallEnd);
                         CHECK(uniq.size() == r.wallEnd - r.wallBegin);
                     } else {
-                        CHECK(r.wallEnd - r.wallBegin == scene.wallCount());
+                        // Brute records no per-ray wall lists (they would be T * n entries)
+                        CHECK(r.wallEnd == r.wallBegin);
                         CHECK(r.cellEnd == r.cellBegin);
                     }
                 }
                 for (std::uint32_t v : trace.cellVisits) visitsTotal += v;
                 CHECK(cellsTotal == traced.stats.cellsVisited);
-                CHECK(wallsTotal == traced.stats.wallTests);
+                if (mode == Mode::Grid) {
+                    CHECK(wallsTotal == traced.stats.wallTests);
+                    CHECK_FALSE(trace.allWallsTested);
+                } else {
+                    CHECK(wallsTotal == 0);
+                    CHECK(trace.walls.empty());
+                    CHECK(trace.allWallsTested);
+                    CHECK(traced.stats.wallTests == traced.stats.raysCast * scene.wallCount());
+                }
                 CHECK(visitsTotal == traced.stats.cellsVisited);
                 CHECK(trace.cellVisits.size() == (mode == Mode::Grid ? scene.grid().cellCount() : 0u));
             }
@@ -329,4 +338,88 @@ TEST_CASE("steady-state queries do not allocate") {
     CHECK(r.workspace.items.capacity() == ic);
     CHECK(r.workspace.rays.capacity() == rc);
     CHECK(r.workspace.stamp.capacity() == sc);
+}
+
+TEST_CASE("stamp counter wraparound: Grid still equals Brute when the counter is near 2^32") {
+    const Scene scene = makeScatterScene(300, 21);
+    Rng rng(9);
+    VisibilityResult r, b;
+    computeVisibility(scene, {800, 500}, Mode::Grid, r);  // sizes the stamp array
+    const std::uint64_t rays = r.stats.raysCast;
+    // starts below, at and above the wrap threshold (counter > 2^32 - 1 - rays - 1 resets it), with
+    // stale stamps that equal the next ray ids to catch a missing reset
+    const std::uint32_t starts[] = {0u, 5u, 0xFFFFFFFFu - static_cast<std::uint32_t>(rays) - 3u,
+                                    0xFFFFFFFFu - static_cast<std::uint32_t>(rays) - 2u,
+                                    0xFFFFFFFFu - static_cast<std::uint32_t>(rays) - 1u,
+                                    0xFFFFFFFFu - static_cast<std::uint32_t>(rays), 0xFFFFFFFFu - 5u, 0xFFFFFFFFu};
+    for (std::uint32_t start : starts) {
+        for (int i = 0; i < 3; ++i) {  // several queries in a row cross the threshold
+            const Vec2 light{rng.range(0, 1600), rng.range(0, 1000)};
+            r.workspace.stampCounter = (i == 0) ? start : r.workspace.stampCounter;
+            std::fill(r.workspace.stamp.begin(), r.workspace.stamp.end(), start);  // stale values never exceed the counter
+            computeVisibility(scene, light, Mode::Grid, r);
+            computeVisibility(scene, light, Mode::Brute, b);
+            INFO("start " << start << " query " << i);
+            CHECK(r.polygon == b.polygon);
+            CHECK(r.stats.wallTests > 0);
+        }
+    }
+    CHECK(r.workspace.stampCounter < 0xFFFFFFFFu);
+}
+
+namespace {
+// Cell boxes are closed: a point is "in" a cell if it is within the cell's box (small slack for the
+// rounding of the sample point itself, 1e-9 of a cell).
+bool inClosedCell(const Grid& g, int cx, int cy, Vec2 p) {
+    const double sx = 1e-9 * g.cellWidth(), sy = 1e-9 * g.cellHeight();
+    return p.x >= g.xEdge(cx) - sx && p.x <= g.xEdge(cx + 1) + sx && p.y >= g.yEdge(cy) - sy && p.y <= g.yEdge(cy + 1) + sy;
+}
+}  // namespace
+
+TEST_CASE("GridWalker: terminates, exit parameters never decrease, visited cells cover the ray") {
+    Scene s(80, 60);
+    s.setGridResolution(8, 6);  // 10 x 10 cells
+    const Grid& g = s.grid();
+    const std::vector<Vec2> origins = {{35, 25},  {30, 25}, {30, 20},   {0, 35},     {80, 35}, {35, 0},
+                                       {35, 60},  {0, 0},   {80, 60},   {0, 60},     {80, 0},  {10.5, 59.999999},
+                                       {33.3, 41.7}};
+    std::vector<Vec2> dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {-1, -1}, {1, -1}, {-1, 1}, {2, 1}, {-3, 1},
+                              {1e-9, 1}, {1, 1e-9}, {0.1, -0.7}};
+    Rng rng(4);
+    for (int i = 0; i < 40; ++i) dirs.push_back(rng.direction());
+    long long rays = 0;
+    for (Vec2 o : origins)
+        for (Vec2 d : dirs) {
+            ++rays;
+            GridWalker w(g, o, d);
+            std::vector<std::pair<int, int>> visited;
+            double lastExit = -1e300;
+            int steps = 0;
+            while (w.inside()) {
+                REQUIRE(++steps <= g.cols() + g.rows() + 2);  // a straight line crosses at most cols+rows-1 edges
+                const std::size_t c = w.cell();
+                visited.push_back({static_cast<int>(c % static_cast<std::size_t>(g.cols())),
+                                   static_cast<int>(c / static_cast<std::size_t>(g.cols()))});
+                const double exitT = w.exitT();
+                CHECK(exitT >= lastExit);
+                lastExit = exitT;
+                w.advance();
+            }
+            REQUIRE_FALSE(visited.empty());
+            // Independent check: sample points along the ray inside the world; each must lie in the
+            // closed box of some visited cell.
+            double tEnd = 1e300;
+            if (d.x > 0) tEnd = std::min(tEnd, (80 - o.x) / d.x);
+            if (d.x < 0) tEnd = std::min(tEnd, (0 - o.x) / d.x);
+            if (d.y > 0) tEnd = std::min(tEnd, (60 - o.y) / d.y);
+            if (d.y < 0) tEnd = std::min(tEnd, (0 - o.y) / d.y);
+            if (!(tEnd > 0 && tEnd < 1e299)) continue;  // starts on the boundary heading out
+            for (int k = 0; k <= 400; ++k) {
+                const Vec2 p = o + d * (tEnd * k / 400.0);
+                bool covered = false;
+                for (auto [cx, cy] : visited) covered = covered || inClosedCell(g, cx, cy, p);
+                if (!covered) FAIL_CHECK("ray from " << str(o) << " dir " << str(d) << " point " << str(p) << " not covered");
+            }
+        }
+    CHECK(rays > 500);
 }
