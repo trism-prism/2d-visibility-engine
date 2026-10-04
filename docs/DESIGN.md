@@ -20,7 +20,7 @@ Rejected: raylib + rlImGui (a third bridging dependency for no gain), SFML (heav
 - **World**: axis-aligned rectangle `[0,W] x [0,H]` in world units (doubles). Its four edges are permanent walls (indices 0..3). This rectangle is the finite visibility boundary: nothing outside it exists.
 - **Wall**: closed line segment `A-B`, opaque, two-sided, zero thickness.
 - **Insertion rules** (`Scene::addWall`), applied identically to user edits and stress generators:
-  - non-finite coordinates: rejected;
+  - non-finite coordinates, or any coordinate with magnitude above 1e150 (differences would overflow): rejected;
   - the segment is clipped to the world rectangle (Liang-Barsky); a wall entirely outside is rejected;
   - clipped length `< kMinWallLength` (1e-6): rejected (covers zero-length input).
 - **Crossing walls are supported.** Walls may cross, touch, share endpoints, form T-junctions, and overlap collinearly. No splitting is performed; instead every pairwise intersection point is added as a ray target (section 3).
@@ -40,7 +40,7 @@ Output: a star-shaped polygon around the light `L`, vertices in counter-clockwis
 2. For each ray compute two distances, the one-sided limits of the nearest hit as the direction approaches from clockwise (`tMinus`) and from counter-clockwise (`tPlus`). They differ exactly where a wall edge is a silhouette.
 3. Emit `L + tMinus*d`, then `L + tPlus*d` if different. Consecutive duplicates are dropped.
 
-**Exact orientation** (`orient` in `core/geometry`): the sign of `(b-a) x (c-a)` evaluated exactly on the given doubles (floating-point filter, then an error-free expansion fallback). It is the only source of combinatorial decisions: the angular order and the side of a ray a point lies on. Distances `t` are ordinary floating point.
+**Exact orientation** (`orient` in `core/geometry`): the sign of `(b-a) x (c-a)` evaluated exactly on the given doubles (floating-point filter, then an error-free expansion fallback). It is the only source of combinatorial decisions: the angular order and the side of a ray a point lies on. Distances `t` are ordinary floating point. Exactness assumes no overflow or underflow in the products, which holds for world-scale coordinates (accepted walls lie inside the world rectangle and the light is clamped to it); it would fail only for points about 1e-150 apart or closer, far below `kLightClearance`.
 
 Why exactness is required, not optional: an earlier revision sorted by `atan2` and classified sides with a rounded cross product. For a light, a wall end and another target that are collinear in decimal but not in binary, the sort and the side test could disagree, dropping a polygon vertex (repro: world 1x1, wall `(0.6,0.4)-(0.5,0.3)`, light `(0.7,0.3)`; area 0.465 instead of 0.765). With one exact predicate both decisions are consistent with the scene as actually stored.
 
@@ -52,6 +52,8 @@ Why exactness is required, not optional: an earlier revision sorted by `atan2` a
 | `sa`, `sb` same strict sign | no hit |
 | opposite strict signs (proper crossing) | `t = cross(A-L, B-A) / cross(d, B-A)`; counts for both sides |
 | exactly one is zero (endpoint `Q` on the ray line) | `t = dot(Q-L, d) / dot(d, d)`; counts for `tPlus` only if the other endpoint is left of the ray (`> 0`), for `tMinus` only if right |
+
+For a proper crossing, `t` must lie between the projections of `A` and `B` onto the ray, `dot(A-L,d)/dot(d,d)` and `dot(B-L,d)/dot(d,d)`. For a wall seen almost end-on the quotient above is a ratio of two rounding-noise values and can violate this (negative, huge or non-finite); in that case `t` is taken from the point `A + u(B-A)`, `u = |fa| / (|fa| + |fb|)` with the rounded `fa = cross(d, A-L)`, `fb = cross(d, B-L)` (`u = 1/2` if both are zero). The exact side tests have already decided that the wall blocks the ray; this rule only guarantees the reported distance is on the wall, so a blocking wall is never skipped.
 
 A hit counts only if `t * |d| > kLightClearance`. `t` is in units of `d = P - L`, so the target itself is at exactly `t = 1`. Remaining rounding is confined to positions: `t` values, and intersection targets, whose computed position can differ from the true crossing by a few ulps. Such a ray is still classified exactly for its own direction, so the worst effect is a sliver of area on the order of rounding error, never a missing or misordered vertex. A light on the world boundary sees nothing on rays that leave the world; the polygon vertex for that side is the light itself.
 
@@ -101,7 +103,7 @@ No logarithmic query bound is claimed. The grid wins when rays stop early or pas
 
 ```
 edit (add/delete/reset/load stress)  ->  Scene: walls -> grid -> intersections -> targets
-light move                           ->  computeVisibility(scene, light, mode, &stats, trace?)
+light move                           ->  computeVisibility(scene, light, mode, result, trace?)
                                           sort targets -> cast rays (brute | grid) -> polygon
 app                                  ->  draw light gradient, shadow quads behind polygon edges, walls, overlay, dashboard
 ```
@@ -115,6 +117,6 @@ The overlay is drawn from a `Trace` filled by the real query code (cells visited
 3. Independent oracle: point-in-polygon of the result agrees with a direct "segment light->q crosses no wall" predicate for random points (excluding a thin band at the polygon boundary), and polygon area agrees with dense angular sampling.
 4. Seeded differential test: baseline and grid outputs bitwise equal over random scenes and light positions; seed printed on failure.
 5. Grid invariants: registration is a superset of a brute-force segment/cell overlap; intersection finder equals an `O(n^2)` reference.
-6. Tests pass under AddressSanitizer (MSVC `/fsanitize=address`).
+6. Tests pass under AddressSanitizer (MSVC `/fsanitize=address`). The `debug` and `asan` presets run every test case with reduced iteration counts (`VIS_TEST_SCALE`); only `release` runs the full counts.
 7. App: draw, delete, drag light, reset, mode switch, overlay, each stress scene; verified through scripted input replay and captured frames.
 8. Release benchmark CSV across wall counts and layouts, including update costs, with unfavorable cases reported.
