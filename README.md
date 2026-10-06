@@ -1,16 +1,24 @@
 # Real-time 2D Visibility and Lighting Engine
 
-A C++20 library and desktop application that computes, for a point light inside a rectangular world of line-segment walls, the exact region of the world the light can see, and draws it with shadows. The visibility polygon is built by casting one ray at every wall endpoint and every wall-wall crossing and recording the nearest wall hit on each side of the ray (no angular offsets). Two interchangeable back ends produce bit-identical output: a baseline that tests every wall for every ray, and a uniform-grid version that tests only the walls registered in the cells a ray walks through. The application lets you drag the light, draw and delete walls while it runs, switch back ends, compare them, load stress scenes of 100-5000 walls, and overlay the cells walked and walls tested by any ray. A headless benchmark compares the two back ends and reports edit costs.
+A C++20 library and desktop application that computes, for a point light inside a rectangular world of line-segment walls, the exact region of the world the light can see, and draws it with shadows. The visibility polygon is built by casting one ray at every wall endpoint and every wall-wall crossing and recording the nearest wall hit on each side of the ray (no angular offsets). Two interchangeable back ends produce bit-identical output: a baseline that tests every wall for every ray, and a uniform-grid version that tests only the walls registered in the cells a ray walks through. The desktop application is written for a reader who has never seen the algorithm: you drag the light, draw and delete walls while it runs, switch between the two methods (called "Check every wall" and "Use the grid" on screen), watch a work meter that counts how many wall checks each method needs, load scenes of 100-5000 walls, and follow any single ray. A six-step guided tour opens on first launch, and an "Engine details" level shows the precise numbers and terms. A headless benchmark compares the two back ends and reports edit costs.
 
-![Demo scene with the light and shadows](docs/images/demo_default.png)
+![The demo room on first launch, with the guided tour card open](docs/images/simple_demo.png)
 
-| Probe ray, Grid mode | Probe ray, Baseline mode |
+| Follow one ray, "Use the grid" | Follow one ray, "Check every wall" |
 |---|---|
-| ![Probe overlay in Grid mode](docs/images/demo_probe_grid.png) | ![Probe overlay in Baseline mode](docs/images/demo_probe_baseline.png) |
+| ![One ray followed with the grid: only a few walls are tested](docs/images/simple_follow_ray_grid.png) | ![One ray followed with Check every wall: every wall is tested](docs/images/simple_follow_ray_baseline.png) |
 
-| Scatter | Maze | Long walls | Cluster |
+| The work meter on 1,000 scattered walls | Engine details level |
+|---|---|
+| ![Work meter on the Scattered walls scene](docs/images/simple_scatter_meter.png) | ![Engine details with the probe numbers](docs/images/details_demo.png) |
+
+![Guided tour, step 4 of 6, with the legend beside it](docs/images/tour_step4.png)
+
+| Scattered walls | Maze | Long walls | Tight cluster |
 |---|---|---|---|
-| ![Scatter](docs/images/stress_scatter_grid.png) | ![Maze](docs/images/stress_maze_grid.png) | ![Long walls](docs/images/stress_long_grid.png) | ![Cluster](docs/images/stress_cluster_grid.png) |
+| ![Scattered walls](docs/images/stress_scatter_grid.png) | ![Maze](docs/images/stress_maze_grid.png) | ![Long walls](docs/images/stress_long_grid.png) | ![Tight cluster](docs/images/stress_cluster_grid.png) |
+
+All screenshots are real captures of the application (`tests/scripts/captures.script`, 1280x800, converted from BMP to PNG). The bottom row uses the "The grid" view on 1,000 walls.
 
 Documents: [Architecture](docs/ARCHITECTURE.md), [Walkthrough](docs/WALKTHROUGH.md), [Design contract](docs/DESIGN.md), [Decisions](docs/DECISIONS.md), [Benchmark](docs/BENCHMARK.md).
 
@@ -54,48 +62,112 @@ Other presets (`CMakePresets.json`): `debug` (Debug) and `asan` (RelWithDebInfo 
 .\scripts\dev.ps1 ctest --test-dir build\no-app
 ```
 
-**What was run for this README**, from clean `buildelease` and `build
-o-app` directories: configure (exit 0, 26 s), build (exit 0, 42 s, 0 compiler warnings), `ctest --preset release` (3 of 3 passed: `bench_quick`, `vis_tests`, `app_script`), `ctest -L app` (1 of 1), `ctest -L bench` (1 of 1), the `vis_bench --quick` line (exit 0), the `vis_app --script tests\scripts\main.script` line (exit 0, "script ok"), a `vis_app ... --capture` line with most flags (exit 0), the `no-app` configure, build and `ctest` (2 of 2: `bench_quick`, `vis_tests`; `_deps` contained only doctest). The debug and asan presets were configured, built and passed `ctest` in the same working tree (3 of 3 and 2 of 2). The full `vis_bench` run is not repeated here; its output is `bench/results/`. Test counts in that tree: 60 `vis_tests` cases, 757,017 assertions (release), 419,725 (debug), 393,784 (asan).
+**What was run for this README**, from clean `build\release` and `build\no-app` directories: configure (exit 0, 26 s), build (exit 0, 42 s, 0 compiler warnings), `ctest --preset release` (3 of 3 passed: `bench_quick`, `vis_tests`, `app_script`), `ctest -L app` (1 of 1), `ctest -L bench` (1 of 1), the `vis_bench --quick` line (exit 0), the `vis_app --script tests\scripts\main.script` line (exit 0, "script ok"), a `vis_app ... --capture` line with most flags (exit 0), the `no-app` configure, build and `ctest` (2 of 2: `bench_quick`, `vis_tests`; `_deps` contained only doctest). The debug and asan presets were configured, built and passed `ctest` in the same working tree (3 of 3 and 2 of 2). The full `vis_bench` run is not repeated here; its output is `bench/results/`. Test counts in that tree: 60 `vis_tests` cases, 757,017 assertions (release), 419,725 (debug), 393,784 (asan).
 
 ## Using the application
 
-The window has a canvas (left) with the world letterboxed into it and a docked panel (right) with the mode, scene, overlay and dashboard sections. Grid and Controls sections are collapsed by default.
+The window has the room (the world, letterboxed) on the left, a panel on the right, a strip below the room that holds the legend and the tour card, and a one-line status bar at the bottom. The smallest window size is 900 x 600. A "Drag me" tag points at the light until you have dragged it once.
+
+### Two levels: Simple and Engine details
+
+The two buttons at the top of the panel switch the level. **Simple** (the default) uses plain words and fits a 1280 x 800 window without scrolling. **Engine details** adds the precise numbers and terms; every number there is the same one the first version of the application showed, with the same meaning. Hovering a `(?)` or a row label explains the term in one sentence.
+
+Panel, top to bottom:
+
+| Section | What it does |
+|---|---|
+| "A light in a room of walls" | One-paragraph explanation and a "Take the tour" button |
+| Method cards | **Check every wall** is the Baseline back end (called Baseline in the first version of the interface, the benchmark and these documents; `Brute` in the code and `--mode brute`): every ray is tested against every wall. **Use the grid** is the Grid back end: a ray only tests the walls in the grid squares it crosses. Both give exactly the same picture. The card in use is highlighted |
+| What to show | **Light only** (overlay `off`), **The grid** (`grid`, formerly "Grid cells": squares tinted by how many rays crossed them), **Follow one ray** (`probe`, formerly "Probe ray": the ray nearest the cursor, the squares it crossed and the walls it tested), **Every ray** (`rays`, formerly "All rays"). A caption under the choice describes what is on screen in one live sentence. "Outline the lit area" (formerly "Outline visibility polygon") draws the edge of the lit region, the visibility polygon. In Engine details the probe's numbers are listed here: squares crossed, walls tested "X of N", `tMinus`, `tPlus` |
+| How much work? | The work meter, below |
+| Scene cards | **Demo room** (key `R`), **Scattered walls** (`1`, the engine's Scatter scene), **Maze** (`2`), **Long walls** (`3`), **Tight cluster** (`4`, the engine's Cluster scene), each with a one-line description. The **Walls** slider picks 100, 250, 500, 1,000, 2,000, 3,000 or 5,000 walls for the generated scenes; releasing it rebuilds the current generated scene (it does nothing to the demo room). **Clear walls** (`C`) and **Reset** (`R`). A short orange note appears under the cards when "Check every wall" would take about 30 ms or more per update in the current scene |
+| Engine details only | Engine numbers, Last edit cost, Run both and compare, Grid resolution and a key list, plus a Seed field under the scene cards (see below) |
+
+The strip under the room shows the **legend** for the selected overlay (what the orange, grey, cyan and gold marks mean) and, while the tour is open, the **tour card**. On a narrow window they stack and the legend shortens.
+
+#### The work meter
+
+"How much work?" compares the two methods in **wall tests**: one wall test is one ray checked against one wall. Two bars share one linear scale (a non-zero value is never drawn thinner than 3 px; the true number is printed above the bar), the method in use is tagged "in use", and a sentence states the ratio ("The grid does 22% of the work here."). Below the bars the application prints the arithmetic, for example `78 rays × 59 walls = 4,602 checks`, then **Time to work out the lit area**: the median of the last (up to) 60 real timed queries of the method in use, shown in milliseconds in Simple and in microseconds or milliseconds in Engine details.
+
+Where the two numbers come from (`App::updateMeter`, `app/app.cpp`; `WorkMeter`, `app/app.h`):
+
+- **Check every wall = rays x walls.** Exact arithmetic, not an estimate: Baseline tests every wall for every ray, and the interaction script checks that the counter measured in Baseline mode equals this product. "Rays" is the ray count of the latest timed query; "walls" includes the 4 outer walls.
+- **Use the grid = wall tests measured for the current light position.** With the grid in use, it is the wall-test counter of the timed query. In Baseline with "Run both and compare" on, it is the counter of the timed Grid query that runs alongside. In Baseline with Compare off there is no Grid query, so the application runs **one extra Grid query per update** purely to read this counter. That pass is not timed and its result is never added to any displayed time. The two ways give the same count for the same light position (the script checks this).
+- **When the extra pass is skipped.** If rays x walls is above 20,000,000 (`kMeterSkipTests`) the extra pass is not run, so "Check every wall" never gets slower for the meter's sake. The grid bar then shows "not measured" on a dashed track, and the sentence says to switch to the grid. The threshold is a work count, not a time, so it is the same on every machine.
+- The sentence changes to "The grid saves almost nothing here" when the grid does 90% or more of the baseline work (with a reason, walls packed into a few squares or long walls sitting in many squares, when the scene shows it) and to "less than 1%" below 1%.
+- The orange slow-scene note estimates a Baseline update as the measured query time when Baseline is in use, and otherwise as rays x walls x the cost of one wall test, measured once on a 1,000-wall Scatter scene the first time it is needed. The 30 ms limit is `kSlowMs`.
+
+#### Guided tour
+
+Six steps, shown in a card under the room: Move the light; Change the room (draw and remove a wall); Follow one ray (grid); Check every wall (the same ray, now testing everything); A bigger room (1,000 scattered walls and the meter); Where the grid helps least (1,000 walls packed in one corner). Each step sets the scene, method and overlay it talks about, and **Next** moves on whether or not you did what the card suggested. **Back**, **Close**, `Esc` and the final **Done** step back or close it; "Take the tour" in the panel starts it again from step 1 on the demo room (`App::tourStart`, `app/tour.cpp`).
+
+The tour **starts by itself** only in a plain interactive launch: no `--scene`, `--walls`, `--seed`, `--mode`, `--overlay`, `--light` or `--compare` flag, and no `--capture` or `--script`. `--tour` starts it explicitly (`app/main.cpp`).
+
+### Mouse and keys
 
 | Input | Effect |
 |---|---|
-| Left-drag starting on the light handle (grab radius 16 px) | Move the light; it stays inside the world |
-| Left-drag elsewhere on the canvas | Draw a wall (rubber band); release adds it. A rejected wall shows the reason in the status line |
+| Left-drag starting on the light handle (grab radius 22 px with up to 400 user walls, 18 px up to 1,500, 16 px above; multiplied by the display scale) | Move the light; it stays inside the world. Cursor: hand over the handle, four-way arrow while dragging |
+| Left-drag elsewhere on the room | Draw a wall (rubber band, crosshair cursor); release adds it. A rejected wall shows the reason in the status bar |
 | Shift held while drawing | Snap the wall's end points to existing wall end points within 8 px |
-| Right-click within 8 px of a wall | Delete that wall (it is highlighted red while hovered). User walls are looked up first, so one lying on the world edge can be deleted; the four boundary walls themselves are not deletable and the status line says so |
-| `Tab` or `M` | Switch between Baseline and Grid. The scene and the light are untouched |
-| `R` | Reset to the demo scene |
+| Right-click within 8 px of a wall | Delete that wall (it is highlighted while hovered). User walls are looked up first, so one lying on the world edge can be deleted; the four outer walls are not deletable and the status bar says so |
+| `Tab` or `M` | Switch between "Check every wall" and "Use the grid". The scene and the light are untouched |
+| `R` | Reset to the demo room (same as the Demo room card and the Reset button) |
 | `C` | Remove all user walls |
-| `O` | Cycle the overlay: off, grid cells, probe ray, all rays |
-| `1` `2` `3` `4` | Load the Scatter, Maze, Long walls or Cluster stress scene (wall count and seed from the panel) |
-| `Esc` | Cancel the wall being drawn |
+| `O` | Cycle What to show: Light only, The grid, Follow one ray, Every ray |
+| `1` `2` `3` `4` | Load Scattered walls, Maze, Long walls or Tight cluster (wall count from the slider, seed from the Seed field) |
+| `Esc` | Cancel the wall being drawn; also closes the tour |
 
-Keys and mouse presses are ignored while a text field has focus or when the press lands on the panel; a drag that started on the canvas keeps working if the cursor crosses the panel. The panel has buttons for the same actions plus: the wall count (100-5000) and seed fields for stress scenes, an automatic/manual grid resolution (manual sliders 1-256 per axis), "Compare both modes", and "Outline visibility polygon".
+Keys and mouse presses are ignored while a text field has focus or when the press lands on the panel or the tour card; a drag that started on the room keeps working if the cursor crosses the panel. In Engine details the panel also has the Seed field, **Run both and compare** (formerly "Compare both modes"; a table of both methods' median query time and wall tests, their time ratio, and "Outputs identical: yes"; both methods then run on every update and the order alternates), **Grid resolution** (automatic, or manual sliders of 1-256 squares per axis) and the numbers listed above.
 
-### A short demonstration
+### Showing it to someone
 
-1. Start `vis_app.exe`. The demo scene (55 walls) opens with the light at (610, 290). Drag the light handle and watch the shadows follow.
-2. Press `O` twice to select **Probe ray**. Move the cursor over the canvas: the ray nearest the cursor direction is drawn with the cells it walked (numbered), the walls it tested (orange) and its two hit points. The panel shows "Cells walked" and "Walls tested X of 59".
-3. Press `Tab` to switch to Baseline. The same probe now reports every wall tested (59 of 59) and zero cells: Baseline has no grid. The polygon on screen does not change.
-4. Press `Tab` again, then tick **Compare both modes**. The panel shows both modes' median query time and wall tests, their time ratio, and "Outputs identical: yes". While it is on, both back ends run on every query (the order alternates between queries).
-5. Click **Maze - mixed** (or press `2`) and choose the **Grid cells** overlay: cells are tinted by how many rays walked them. Look at the Dashboard: walls, crossings k, targets T, wall tests, cells walked.
-6. Draw a wall on empty canvas. The status line shows "Wall added", and "Last edit cost" in the Dashboard shows what the rebuild cost (paid once per edit).
-7. Right-click that wall to delete it. Right-click a boundary wall to see the refusal message.
-8. Press `R` to return to the demo scene.
+A two-minute walkthrough, in order:
+
+1. Start `vis_app.exe`. The tour opens on step 1. Drag the light around the demo room for ten seconds: the bright area is exactly what it can see.
+2. Click **Next**. Drag on empty floor to draw a wall, right-click it to remove it.
+3. Click **Next**. Move the mouse over the room: the orange walls are the only ones that ray had to test.
+4. Click **Next**. The same ray now tests every wall (all orange). The picture has not changed.
+5. Click **Next**. 1,000 short walls load. Point at the work meter: in the captured run, 13,327 wall tests with the grid against 2,183,700 for checking every wall (the figures depend on where the light is).
+6. Click **Next**. The walls are packed into a corner and the grid saves less. Click **Done**.
+7. Click **Engine details**, tick **Run both and compare**, and show "Outputs identical: yes" and the two methods' times.
+
+### A longer demonstration
+
+Everything in the tour, then:
+
+1. Press `R`, choose **Follow one ray** (`O`), and in Engine details read the probe numbers: squares crossed, walls tested "X of 59", and the two limits `tMinus` and `tPlus`.
+2. Press `Tab`. The probe now reports every wall tested, and **The grid** view has no tinted squares: Baseline has no grid. The lit area does not change.
+3. Press `Tab` again, tick **Run both and compare** and read the query times, wall tests and "Outputs identical: yes".
+4. Click **Maze** (or press `2`) and choose **The grid**: squares are tinted by how many rays crossed them, and the legend states the busiest count. Engine numbers show walls, crossings k, targets T, wall tests and cells walked.
+5. Click **Long walls**, switch to **Check every wall** and read the orange slow-scene note. Compare the two bars: the grid cuts the tests per ray but not the number of rays (see [BENCHMARK.md](docs/BENCHMARK.md), "Where the grid loses").
+6. Draw a wall; "Last edit cost" shows what the rebuild cost, paid once per edit. Right-click it to delete it, and right-click an outer wall to see the refusal message.
+7. Press `R` to return to the demo room.
 
 ### Command-line flags
 
-`vis_app [--size WxH] [--scene demo|scatter|maze|long|cluster] [--walls N] [--seed S] [--mode brute|grid] [--overlay off|grid|probe|rays] [--light x,y] [--compare] [--capture file.bmp [--frames N]] [--script file]`
+`vis_app [--size WxH] [--scene demo|scatter|maze|long|cluster] [--walls N] [--seed S] [--mode brute|grid] [--overlay off|grid|probe|rays] [--light x,y] [--compare] [--tour] [--capture file.bmp [--frames N]] [--script file]`
 
-`--walls` is clamped to 100-5000. `--capture` renders N frames (default 3), writes a 24-bit BMP (parent directories are created) and exits. `--script` replays a script and exits when it ends. Capture and script runs use a hidden window and no vsync, so the window size is limited by the screen (a `--size 2560x1440` capture produced 1924x1050 on the verified machine).
+`--mode brute` selects "Check every wall" (Baseline) and `--mode grid` "Use the grid". `--walls` is clamped to 100-5000. `--size` is clamped to 400-7680 by 300-4320, and the window cannot be resized below 900 x 600. `--tour` opens the guided tour (see above). `--capture` renders N frames (default 3), writes a 24-bit BMP (parent directories are created) and exits. `--script` replays a script and exits when it ends. Capture and script runs use a hidden window and no vsync, so the window size is limited by the screen (a `--size 2560x1440` capture produced 1924x1050 on the verified machine).
 
 ### Scripts
 
-A script is a text file, one command per line, `#` starts a comment. Events go through ImGui's input queue, so the real canvas input handling runs; real OS mouse and keyboard delivery through GLFW is not exercised. Commands (documented in `app/script.h`): `move X Y`, `move @Button Label`, `wmove X Y` (world coordinates through the app's transform), `down|up left|right`, `key Tab|R|C|O|M|1|2|3|4|Escape`, `wait N` (frames), `capture file.bmp`, `log`, `print FIELD...`, `set walls|seed|compare|mode|overlay ...`, `save NAME FIELD`, `expect FIELD OP VALUE` (`== != < <= > >= has`, value may be `$NAME`), `quit`. Fields are listed in `App::field` (`app/app.cpp`). The process exits non-zero if any `expect` fails. Scripts in `tests/scripts/`: `main.script` (the CTest), `captures.script` (writes review captures to `build/captures`), `measure.script` (prints live measurements per stress scene).
+A script is a text file, one command per line, `#` starts a comment. Events go through ImGui's input queue, so the real canvas input handling runs; real OS mouse and keyboard delivery through GLFW is not exercised, and neither is the cursor shape the OS displays. Commands (documented in `app/script.h`):
+
+- Mouse and keys: `move X Y`, `move @Button Label` (the centre of a panel or tour-card button, for example `move @Engine details` or `move @Next`), `wmove X Y` (world coordinates through the app's transform), `down|up left|right`, `key Tab|R|C|O|M|1|2|3|4|Escape`, `wait N` (frames).
+- Output: `capture file.bmp`, `log`, `print FIELD...`, `quit`.
+- State: `set walls N | seed N | compare on|off | mode brute|grid | overlay off|grid|probe|rays | detail simple|details | tour on|off`.
+- Checks: `save NAME FIELD`, `expect FIELD OP VALUE` (`== != < <= > >= has`, the value may be `$NAME`). The process exits non-zero if any `expect` fails.
+
+Variables (the `FIELD` names, all handled in `App::field`, `app/app.cpp`):
+
+- Model: `mode` (`grid` or `brute`), `scene`, `overlay`, `compare`, `detail` (`simple` or `details`), `walls`, `walls_total`, `seed`, `light_x`, `light_y`, `status`, `drawing`.
+- Query: `k`, `T`, `rays`, `wall_tests`, `cells`, `vertices`, `identical`, `poly_hash`, `query_us`, `query_median_us`, `median_us_brute`, `median_us_grid`, `tests_brute`, `tests_grid`, `rays_x_walls`, `rebuild_grid_us`, `rebuild_isect_us`, `grid_cols`, `grid_rows`, `grid_regs`.
+- Work meter: `meter_rays`, `meter_walls`, `meter_baseline`, `meter_grid` (or `unknown`), `meter_source` (`measured`, `extra_pass` or `skipped`), `meter_verdict`, `slow_note`, `slow_ms`, `slow_text`.
+- Probe: `probe_cells`, `probe_walls`, `probe_tminus`, `probe_tplus` (`none` when there is no valid probe ray).
+- Interface: `tour` (`on` or `off`), `tour_step`, `caption`, `cursor` (`arrow`, `hand`, `move` or `cross`), `light_hint`, `panel_overflow`, `panel_scroll`, `panel_slack`, `mouse_x`, `mouse_y`, `scale`, `origin_x`, `origin_y`.
+
+Scripts in `tests/scripts/`: `main.script` (the CTest `app_script`: the canvas interaction checks, then checks of the interface: Simple fits without scrolling, the work meter figures in both methods, the slow-scene note, captions, cursors, the tour), `captures.script` (writes the review captures to `build/captures`), `captures_small.script` (the 900 x 600 capture, run with `--size 900x600`), `measure.script` (prints live measurements per stress scene). The cursor is checked as application state (`cursor`), not as what the OS displays; hands-on use with a physical mouse has not been done.
 
 ## Supported geometry and limits
 
@@ -113,6 +185,13 @@ core/                               static library viscore (standard library onl
   visibility.* computeVisibility, Trace, statistics
   scenes.*    deterministic demo and stress scene generators, light placement
 app/                                vis_app: GLFW + Dear ImGui front end
+  main.cpp    window, command-line flags, frame loop, cursors, capture
+  app.*       application state, input, queries, work-meter counters, script fields
+  ui.cpp      panel (Simple / Engine details), status line, fonts and theme
+  widgets.*   panel building blocks and the plain-language glossary
+  meter.cpp   work meter; details.cpp  Engine details panels
+  tour.cpp    guided tour; legend.*  legend and the strip under the room
+  render.cpp  canvas drawing and overlays; script.*  script runner
 bench/                              vis_bench and committed results (bench/results/)
 tests/                              doctest suite (vis_tests) and app scripts (tests/scripts/)
 docs/                               DESIGN, ARCHITECTURE, WALKTHROUGH, DECISIONS, BENCHMARK, images/
