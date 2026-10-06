@@ -6,6 +6,8 @@
 #include <cstring>
 #include <vector>
 
+#include "widgets.h"
+
 using vis::Vec2;
 
 const char* overlayName(Overlay o) {
@@ -16,6 +18,27 @@ const char* overlayName(Overlay o) {
         case Overlay::Rays: return "rays";
     }
     return "?";
+}
+
+namespace {
+const SceneInfo kSceneInfos[] = {
+    {vis::SceneKind::Demo, "Demo room", "A small hand-built room. Good for drawing your own walls.", "R"},
+    {vis::SceneKind::Scatter, "Scattered walls", "Many short walls spread out evenly. The grid's best case.", "1"},
+    {vis::SceneKind::Maze, "Maze", "Rooms and corridors with doors, plus a few long diagonals.", "2"},
+    {vis::SceneKind::LongWalls, "Long walls", "Long walls that cross each other a lot. Hard for both methods.", "3"},
+    {vis::SceneKind::Cluster, "Tight cluster", "Everything packed into one corner. The grid helps least here.", "4"},
+};
+std::string wallsPhrase(std::size_t n) { return ui::fmtInt(n) + (n == 1 ? " wall" : " walls"); }
+}  // namespace
+
+const SceneInfo& sceneInfo(vis::SceneKind k) {
+    for (const SceneInfo& i : kSceneInfos)
+        if (i.kind == k) return i;
+    return kSceneInfos[0];
+}
+const SceneInfo* sceneInfos(int& count) {
+    count = static_cast<int>(sizeof kSceneInfos / sizeof kSceneInfos[0]);
+    return kSceneInfos;
 }
 
 double Stat::median() const {
@@ -52,11 +75,11 @@ std::uint64_t fnv(const std::vector<Vec2>& poly) {
 
 const char* statusText(vis::AddStatus s) {
     switch (s) {
-        case vis::AddStatus::Added: return "added";
-        case vis::AddStatus::RejectedNonFinite: return "non-finite coordinates";
-        case vis::AddStatus::RejectedOutside: return "entirely outside the world";
-        case vis::AddStatus::RejectedTooShort: return "too short (under 1e-6 after clipping)";
-        case vis::AddStatus::RejectedTooLarge: return "coordinate magnitude above 1e150";
+        case vis::AddStatus::Added: return "Wall added";
+        case vis::AddStatus::RejectedNonFinite: return "That wall can't be added (invalid position)";
+        case vis::AddStatus::RejectedOutside: return "That wall is outside the room";
+        case vis::AddStatus::RejectedTooShort: return "That wall is too short to add";
+        case vis::AddStatus::RejectedTooLarge: return "That wall can't be added (too far away)";
     }
     return "?";
 }
@@ -106,29 +129,39 @@ void App::loadScene(vis::SceneKind k) {
         light = vis::chooseLight(scene, preferred);
     }
     sceneChanged();
-    if (k == vis::SceneKind::Demo) setStatus("Demo scene loaded", false);
-    else setStatus(std::string(vis::sceneKindName(k)) + " scene: " + std::to_string(scene.userWallCount()) +
-                       " walls, seed " + std::to_string(seed),
-                   false);
+    if (k == vis::SceneKind::Demo) setStatus("Demo room loaded", false);
+    else setStatus(std::string(sceneInfo(k).name) + ": " + wallsPhrase(scene.userWallCount()), false);
 }
 
 void App::clearWalls() {
     scene.clear();
     drawing = false;
     sceneChanged();
-    setStatus("All user walls removed", false);
+    setStatus("All walls removed", false);
 }
 
-void App::toggleMode() {
-    mode = mode == vis::Mode::Grid ? vis::Mode::Brute : vis::Mode::Grid;
+void App::setMode(vis::Mode m) {
+    if (m == mode) return;
+    mode = m;
     dirty = true;
-    setStatus(mode == vis::Mode::Grid ? "Mode: Grid" : "Mode: Baseline (brute force)", false);
+    setStatus(mode == vis::Mode::Grid ? "Now using the grid" : "Now checking every wall", false);
 }
 
-void App::cycleOverlay() {
-    overlay = static_cast<Overlay>((static_cast<int>(overlay) + 1) % 4);
+void App::toggleMode() { setMode(mode == vis::Mode::Grid ? vis::Mode::Brute : vis::Mode::Grid); }
+
+void App::setOverlay(Overlay o) {
+    overlay = o;
     dirty = true;  // the trace is only recorded while an overlay needs it
-    setStatus(std::string("Overlay: ") + overlayName(overlay), false);
+    static const char* const names[] = {"Showing the light only", "Showing the grid", "Following one ray", "Showing every ray"};
+    setStatus(names[static_cast<int>(o)], false);
+}
+
+void App::cycleOverlay() { setOverlay(static_cast<Overlay>((static_cast<int>(overlay) + 1) % 4)); }
+
+float App::grabRadius() const {
+    // Big enough to grab easily; smaller in dense scenes so it does not swallow wall drawing.
+    const std::size_t n = scene.userWallCount();
+    return (n <= 400 ? 22.0f : n <= 1500 ? 18.0f : 16.0f) * uiScale;
 }
 
 void App::cancelWall() {
@@ -153,12 +186,19 @@ void App::layout(ImVec2 display) {
     displaySize = display;
     canvasMin = {0.0f, 0.0f};
     canvasMax = {std::max(display.x - panelWidth(), 100.0f), std::max(display.y - statusHeight(), 100.0f)};
-    const float margin = 24.0f * uiScale;
+    const float margin = 16.0f * uiScale;
+    // Legend and tour card live in a strip below the world; with neither, the world is centred in the
+    // whole canvas.
+    strip = stripLayout();
+    const float band = strip.height > 0.0f ? strip.height + 10.0f * uiScale + 4.0f * uiScale : 0.0f;
     const float cw = canvasMax.x - canvasMin.x - 2 * margin;
-    const float ch = canvasMax.y - canvasMin.y - 2 * margin;
+    const float ch = canvasMax.y - canvasMin.y - 2 * margin - band;
     view.scale = std::max(0.02f, std::min(cw / static_cast<float>(scene.width()), ch / static_cast<float>(scene.height())));
+    const float worldH = static_cast<float>(scene.height()) * view.scale;
+    const float centred = canvasMin.y + (canvasMax.y - canvasMin.y - worldH) * 0.5f;
+    const float lowest = canvasMax.y - margin - band - worldH;
     view.origin = {canvasMin.x + (canvasMax.x - canvasMin.x - static_cast<float>(scene.width()) * view.scale) * 0.5f,
-                   canvasMin.y + (canvasMax.y - canvasMin.y - static_cast<float>(scene.height()) * view.scale) * 0.5f};
+                   std::max(canvasMin.y + margin * 0.5f, std::min(centred, lowest))};
 }
 
 int App::nearestWall(ImVec2 mouse, float maxPixels, bool userOnly) const {
@@ -200,7 +240,7 @@ void App::handleInput(ImGuiIO& io) {
     const bool free = !io.WantCaptureMouse && overCanvas;
 
     const ImVec2 lp = view.toScreen(light);
-    const float grab = 16.0f * uiScale;
+    const float grab = grabRadius();
     hoverLight = free && !drawing && std::hypot(m.x - lp.x, m.y - lp.y) <= grab;
     hoverWall = -1;
     hoverBoundary = false;
@@ -214,6 +254,7 @@ void App::handleInput(ImGuiIO& io) {
     if (ImGui::IsMouseClicked(ImGuiMouseButton_Left, false) && free) {
         if (hoverLight) {
             draggingLight = true;
+            lightMoved = true;
         } else {
             drawing = true;
             drawStart = snapped(m, io.KeyShift);
@@ -231,9 +272,9 @@ void App::handleInput(ImGuiIO& io) {
             const vis::AddStatus st = scene.addWall(drawStart, drawEnd);
             if (st == vis::AddStatus::Added) {
                 sceneChanged();
-                setStatus("Wall added (" + std::to_string(scene.userWallCount()) + " walls)", false);
+                setStatus("Wall added \u2014 " + wallsPhrase(scene.userWallCount()) + " in the room", false);
             } else {
-                setStatus(std::string("Wall rejected: ") + statusText(st), true);
+                setStatus(statusText(st), true);
             }
         }
     }
@@ -242,9 +283,9 @@ void App::handleInput(ImGuiIO& io) {
             scene.removeWall(static_cast<std::size_t>(hoverWall));
             hoverWall = -1;
             sceneChanged();
-            setStatus("Wall deleted (" + std::to_string(scene.userWallCount()) + " walls)", false);
+            setStatus("Wall removed \u2014 " + wallsPhrase(scene.userWallCount()) + " in the room", false);
         } else if (hoverBoundary) {
-            setStatus("Boundary walls cannot be deleted", true);
+            setStatus("The outer walls can't be removed", true);
         }
     }
 
@@ -258,8 +299,18 @@ void App::handleInput(ImGuiIO& io) {
         if (pressed(ImGuiKey_2)) loadScene(vis::SceneKind::Maze);
         if (pressed(ImGuiKey_3)) loadScene(vis::SceneKind::LongWalls);
         if (pressed(ImGuiKey_4)) loadScene(vis::SceneKind::Cluster);
-        if (pressed(ImGuiKey_Escape)) cancelWall();
+        if (pressed(ImGuiKey_Escape)) {
+            if (tourActive) tourClose();
+            cancelWall();
+        }
     }
+
+    // Cursor over the canvas; over the panel or tour card ImGui's own cursor applies (main.cpp).
+    if (draggingLight) cursor = Cursor::Move;
+    else if (drawing) cursor = Cursor::Cross;
+    else if (free && hoverLight) cursor = Cursor::Hand;
+    else if (free) cursor = Cursor::Cross;
+    else cursor = Cursor::Arrow;
 }
 
 // The probe ray is chosen from the trace that is about to be drawn (after updateVisibility), so a
@@ -345,10 +396,89 @@ void App::updateVisibility() {
         runCurrent();
     }
     polyHash = fnv(result.polygon);
+    updateMeter();
 
     // Untimed pass with tracing, only when an overlay reads it.
     if (overlay != Overlay::Off) vis::computeVisibility(scene, light, mode, traceResult, &trace);
     else trace.clear();
+}
+
+// Work meter and slow-scene estimate. Everything here is either arithmetic on counters of the timed
+// query or an untimed pass whose timings are discarded.
+void App::updateMeter() {
+    // Above this many Baseline wall tests (an update of well over 100 ms) the extra untimed Grid pass is
+    // not run, so "Check every wall" never gets slower for the meter's sake. A work count, not a timing,
+    // so the decision is the same on every machine and every run.
+    constexpr std::uint64_t kMeterSkipTests = 20'000'000;
+    constexpr double kSlowMs = 30.0;          // below ~30 updates per second
+    meter.valid = true;
+    meter.rays = result.stats.raysCast;
+    meter.walls = scene.wallCount();
+    meter.baselineTests = meter.rays * static_cast<std::uint64_t>(meter.walls);
+    if (mode == vis::Mode::Grid) {
+        meter.gridTests = result.stats.wallTests;
+        meter.gridSource = WorkMeter::GridSource::Measured;
+    } else if (haveOther) {
+        meter.gridTests = otherResult.stats.wallTests;
+        meter.gridSource = WorkMeter::GridSource::Measured;
+    } else if (meter.baselineTests <= kMeterSkipTests) {
+        vis::computeVisibility(scene, light, vis::Mode::Grid, meterResult);  // never added to any statistic
+        meter.gridTests = meterResult.stats.wallTests;
+        meter.gridSource = WorkMeter::GridSource::ExtraPass;
+    } else {
+        meter.gridSource = WorkMeter::GridSource::Skipped;
+    }
+
+    if (mode == vis::Mode::Brute && result.stats.wallTests >= 100000)
+        bruteNsPerTest = result.stats.castUs * 1000.0 / static_cast<double>(result.stats.wallTests);
+    if (mode == vis::Mode::Brute) {
+        baselineEstMs = result.stats.totalUs / 1000.0;
+    } else {
+        if (meter.baselineTests > 200000 && bruteNsPerTest <= 0.0) {
+            // One-off calibration on a 1000-wall scene: the real cost of a wall test on this machine.
+            const vis::Scene probeScene = vis::makeScene(vis::SceneKind::Scatter, 1000, 1);
+            vis::VisibilityResult r;
+            double best = 1e30;
+            for (int i = 0; i < 3; ++i) {
+                vis::computeVisibility(probeScene, {800, 500}, vis::Mode::Brute, r);
+                if (r.stats.wallTests > 0) best = std::min(best, r.stats.castUs * 1000.0 / static_cast<double>(r.stats.wallTests));
+            }
+            bruteNsPerTest = best < 1e29 ? best : 10.0;
+        }
+        baselineEstMs = static_cast<double>(meter.baselineTests) * bruteNsPerTest / 1e6;
+    }
+    slowBaseline = baselineEstMs >= kSlowMs;
+}
+
+std::string App::slowNote() const {
+    if (!slowBaseline) return {};
+    std::string s = "This scene is slow with \u201CCheck every wall\u201D \u2014 about " + ui::fmtNum(baselineEstMs, 0) +
+                    " ms per update.";
+    if (mode == vis::Mode::Brute) s += " Switch to \u201CUse the grid\u201D to keep it smooth.";
+    return s;
+}
+
+std::string App::overlayCaption() const {
+    switch (overlay) {
+        case Overlay::Off: return "Just the lit area.";
+        case Overlay::Grid:
+            if (mode == vis::Mode::Brute)
+                return "\u201CCheck every wall\u201D doesn't use the grid, so no squares are tinted. The lines are the rays.";
+            return "The world is split into " + std::to_string(scene.grid().cols()) + " x " + std::to_string(scene.grid().rows()) +
+                   " squares. Brighter squares were crossed by more rays.";
+        case Overlay::Probe: {
+            const vis::Trace::RayRecord* r = probe();
+            if (!r) return "Move the mouse over the room to pick a ray.";
+            const std::size_t tested = probeWalls(*r);
+            if (mode == vis::Mode::Brute) return "This one had to test all " + ui::fmtInt(scene.wallCount()) + " walls.";
+            const std::size_t cells = r->cellEnd - r->cellBegin;
+            return "Move the mouse to pick a ray. This one crossed " + ui::fmtInt(cells) + (cells == 1 ? " square" : " squares") +
+                   " and had to test " + ui::fmtInt(tested) + " of " + ui::fmtInt(scene.wallCount()) + " walls.";
+        }
+        case Overlay::Rays:
+            return ui::fmtInt(trace.rays.size()) + " rays, one aimed at each direction where a wall ends or two walls cross.";
+    }
+    return {};
 }
 
 void App::frame(ImGuiIO& io, double time) {
@@ -402,6 +532,27 @@ std::string App::field(const std::string& name) const {
     if (name == "query_median_us") return num(stats[static_cast<int>(mode)].total.median());
     if (name == "rebuild_grid_us") return num(scene.lastRebuild().gridBuildUs);
     if (name == "rebuild_isect_us") return num(scene.lastRebuild().intersectUs);
+    if (name == "detail") return detail == Detail::Simple ? "simple" : "details";
+    if (name == "tour") return tourActive ? "on" : "off";
+    if (name == "tour_step") return std::to_string(tourStep + 1);
+    if (name == "rays_x_walls") return std::to_string(st.raysCast * static_cast<std::uint64_t>(scene.wallCount()));
+    if (name == "meter_rays") return std::to_string(meter.rays);
+    if (name == "meter_walls") return std::to_string(meter.walls);
+    if (name == "meter_baseline") return std::to_string(meter.baselineTests);
+    if (name == "meter_grid") return meter.gridKnown() ? std::to_string(meter.gridTests) : "unknown";
+    if (name == "meter_source")
+        return meter.gridSource == WorkMeter::GridSource::Measured ? "measured"
+               : meter.gridSource == WorkMeter::GridSource::ExtraPass ? "extra_pass" : "skipped";
+    if (name == "meter_verdict") return meterVerdict();
+    if (name == "slow_note") return slowBaseline ? "yes" : "no";
+    if (name == "slow_ms") return num(baselineEstMs);
+    if (name == "slow_text") return slowNote();
+    if (name == "panel_slack") return num(panelSlack);
+    if (name == "panel_scroll") return num(panelScrollMax);
+    if (name == "panel_overflow") return panelOverflow ? "yes" : "no";
+    if (name == "light_hint") return lightMoved ? "no" : "yes";
+    if (name == "caption") return overlayCaption();
+    if (name == "cursor") return cursor == Cursor::Hand ? "hand" : cursor == Cursor::Move ? "move" : cursor == Cursor::Cross ? "cross" : "arrow";
     if (name == "probe_cells" || name == "probe_walls" || name == "probe_tminus" || name == "probe_tplus") {
         const vis::Trace::RayRecord* r = probe();
         if (!r) return "none";
