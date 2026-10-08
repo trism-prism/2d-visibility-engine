@@ -1,36 +1,119 @@
-// Control panel, status line, fonts and theme.
+// Control panel (two levels of detail), status line, fonts and theme.
 #include <algorithm>
 #include <cstdio>
 #include <filesystem>
 
 #include "app.h"
+#include "panel.h"
+#include "widgets.h"
+
+using namespace ui;
 
 namespace {
 
-// A button that also records its centre, so a script can click it with `move @label`.
-bool button(App& app, const char* label, ImVec2 size = ImVec2(0, 0)) {
-    const bool pressed = ImGui::Button(label, size);
-    const ImVec2 lo = ImGui::GetItemRectMin(), hi = ImGui::GetItemRectMax();
-    app.widgets[label] = {(lo.x + hi.x) * 0.5f, (lo.y + hi.y) * 0.5f};
-    return pressed;
+constexpr int kWallStops[] = {100, 250, 500, 1000, 2000, 3000, 5000};
+constexpr int kWallStopCount = static_cast<int>(sizeof kWallStops / sizeof kWallStops[0]);
+
+int nearestStop(int walls) {
+    int best = 0;
+    for (int i = 1; i < kWallStopCount; ++i)
+        if (std::abs(kWallStops[i] - walls) < std::abs(kWallStops[best] - walls)) best = i;
+    return best;
 }
 
-
-void kv(App& app, const char* label, const char* value, const char* hint = nullptr) {
-    ImGui::TableNextRow();
-    ImGui::TableSetColumnIndex(0);
-    ImGui::TextUnformatted(label);
-    if (hint && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", hint);
-    ImGui::TableSetColumnIndex(1);
-    ImGui::PushFont(app.monoFont, 0.0f);
-    ImGui::TextUnformatted(value);
-    ImGui::PopFont();
+void explainerCard(App& app) {
+    cardBegin(app, nullptr);
+    {
+        FontScope f(app, 17.0f);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(kText));
+        ImGui::TextUnformatted("A light in a room of walls");
+        ImGui::PopStyleColor();
+    }
+    ImGui::SameLine();
+    {
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {7.0f * app.uiScale, 1.0f * app.uiScale});
+        FontScope small(app, 13.0f);
+        const float bw = ImGui::CalcTextSize("Take the tour").x + 14.0f * app.uiScale;
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, ImGui::GetContentRegionAvail().x - bw));
+        if (button(app, "Take the tour")) app.tourStart();
+        ImGui::PopStyleVar();
+    }
+    cardText(IM_COL32(204, 212, 230, 255),
+             "The bright area is exactly what the light can see; the rest is shadow. It updates as soon as anything moves.");
+    {
+        FontScope f(app, 12.0f);
+        cardText(kTextDim, "Drag the light, drag the floor to draw, right-click to remove.");
+    }
+    cardEnd(app);
 }
 
-void sectionNote(const char* text) {
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.58f, 0.63f, 0.74f, 1.0f));
-    ImGui::TextWrapped("%s", text);
-    ImGui::PopStyleColor();
+void methodCard(App& app) {
+    cardBegin(app, nullptr);
+    const char* titles[] = {"Check every wall", "Use the grid"};
+    const char* subs[] = {"Simple and slow: each ray is tested against all walls. (Baseline)",
+                          "Each ray only tests walls in the squares it crosses. (Grid)"};
+    const ImU32 accents[] = {kAmber, kCyan};
+    const int clicked = methodCards(app, titles, subs, accents, 2, app.mode == vis::Mode::Brute ? 0 : 1);
+    if (clicked >= 0) app.setMode(clicked == 0 ? vis::Mode::Brute : vis::Mode::Grid);
+    cardTextSmall(app, kTextDim, "Both give exactly the same picture \u2014 only the amount of work differs.");
+    cardEnd(app);
+}
+
+void showCard(App& app) {
+    cardBegin(app, "What to show");
+    const char* labels[] = {"Light only", "The grid", "Follow one ray", "Every ray"};
+    int o = static_cast<int>(app.overlay);
+    if (segmented(app, labels, 4, 2, o, 23.0f)) app.setOverlay(static_cast<Overlay>(o));
+    ImGui::Checkbox("Outline the lit area", &app.outline);
+    helpMarker(gloss::outlinePoints);
+    cardText(IM_COL32(204, 212, 230, 255), "%s", app.overlayCaption().c_str());
+    if (app.detail == Detail::Engine) drawProbeNumbers(app);
+    cardEnd(app);
+}
+
+void scenesCard(App& app) {
+    cardBegin(app, nullptr);
+    int n = 0;
+    const SceneInfo* infos = sceneInfos(n);
+    for (int i = 0; i < n; ++i)
+        if (sceneRow(app, infos[i].name, infos[i].blurb, infos[i].key, app.kind == infos[i].kind)) app.loadScene(infos[i].kind);
+
+    int idx = nearestStop(app.stressWalls);
+    // "Walls" caption, slider, value: the value sits outside the track so the grab never covers it.
+    const float sp = ImGui::GetStyle().ItemSpacing.x;
+    const float capW = ImGui::CalcTextSize("Walls").x, valW = ImGui::CalcTextSize("5,000").x + 2.0f * app.uiScale;
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Walls");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(cardWidth() - capW - valW - 2.0f * sp);
+    if (ImGui::SliderInt("##walls", &idx, 0, kWallStopCount - 1, " ", ImGuiSliderFlags_NoInput)) app.stressWalls = kWallStops[idx];
+    const bool slid = ImGui::IsItemDeactivatedAfterEdit();
+    tooltip("How many walls the generated scenes get (100 to 5,000). Releasing the slider rebuilds the current generated scene.");
+    if (slid && app.kind != vis::SceneKind::Demo) app.loadScene(app.kind);
+
+    ImGui::SameLine();
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(fmtInt(static_cast<std::uint64_t>(app.stressWalls)).c_str());
+    const float half = (cardWidth() - sp) * 0.5f;
+    if (button(app, "Clear walls", {half, 0})) app.clearWalls();
+    tooltip("Remove every wall you can see (the outer walls stay). Key: C");
+    ImGui::SameLine();
+    if (button(app, "Reset", {half, 0})) app.resetDemo();
+    tooltip("Back to the demo room with the light where it started. Key: R");
+
+    if (app.detail == Detail::Engine) {
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Seed");
+        tooltip("The same wall count and seed always give the same scene. Applies when you pick a scene or release the field.");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(cardWidth() * 0.4f);
+        if (ImGui::InputInt("##seed", &app.seed, 0)) app.seed = std::max(app.seed, 0);
+        if (ImGui::IsItemDeactivatedAfterEdit() && app.kind != vis::SceneKind::Demo) app.loadScene(app.kind);
+    }
+
+    const std::string note = app.slowNote();
+    if (!note.empty()) cardTextSmall(app, IM_COL32(255, 196, 120, 255), "%s", note.c_str());
+    cardEnd(app);
 }
 
 }  // namespace
@@ -40,10 +123,11 @@ void setupUi(App& app, float scale) {
     app.uiScale = scale;
     const auto exists = [](const char* p) { return std::filesystem::exists(p); };
     ImFont* ui = nullptr;
-    if (exists("C:/Windows/Fonts/segoeui.ttf")) ui = io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/segoeui.ttf", 15.0f * scale);
+    if (exists("C:/Windows/Fonts/segoeui.ttf")) ui = io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/segoeui.ttf", 14.5f * scale);
     if (!ui) ui = io.Fonts->AddFontDefault();
+    app.uiFont = ui;  // other sizes (headings, captions) are the same font pushed at another size
     app.monoFont = nullptr;
-    if (exists("C:/Windows/Fonts/consola.ttf")) app.monoFont = io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/consola.ttf", 14.5f * scale);
+    if (exists("C:/Windows/Fonts/consola.ttf")) app.monoFont = io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/consola.ttf", 14.0f * scale);
     if (!app.monoFont) app.monoFont = ui;
     io.FontDefault = ui;
 
@@ -53,32 +137,36 @@ void setupUi(App& app, float scale) {
     s.FrameRounding = 4.0f * scale;
     s.GrabRounding = 4.0f * scale;
     s.ChildRounding = 4.0f * scale;
-    s.WindowPadding = {12.0f * scale, 8.0f * scale};
+    s.PopupRounding = 5.0f * scale;
+    s.WindowPadding = {8.0f * scale, 6.0f * scale};
     s.FramePadding = {8.0f * scale, 3.0f * scale};
-    s.ItemSpacing = {8.0f * scale, 4.0f * scale};
+    s.ItemSpacing = {8.0f * scale, 2.5f * scale};
     s.CellPadding = {4.0f * scale, 2.0f * scale};
     s.WindowBorderSize = 0.0f;
-    s.FrameBorderSize = 1.0f * scale;  // visible outline: off states of radios and checkboxes read clearly
+    s.FrameBorderSize = 1.0f * scale;
+    s.ScrollbarSize = 10.0f * scale;
     ImVec4* c = s.Colors;
     c[ImGuiCol_WindowBg] = ImVec4(0.075f, 0.082f, 0.105f, 1.0f);
+    c[ImGuiCol_PopupBg] = ImVec4(0.09f, 0.10f, 0.13f, 0.98f);
     c[ImGuiCol_Text] = ImVec4(0.90f, 0.92f, 0.96f, 1.0f);
-    c[ImGuiCol_TextDisabled] = ImVec4(0.50f, 0.54f, 0.62f, 1.0f);
+    c[ImGuiCol_TextDisabled] = ImVec4(0.58f, 0.62f, 0.72f, 1.0f);
     c[ImGuiCol_Header] = ImVec4(0.14f, 0.16f, 0.21f, 1.0f);
     c[ImGuiCol_HeaderHovered] = ImVec4(0.19f, 0.22f, 0.29f, 1.0f);
     c[ImGuiCol_HeaderActive] = ImVec4(0.22f, 0.26f, 0.34f, 1.0f);
-    c[ImGuiCol_Button] = ImVec4(0.16f, 0.19f, 0.26f, 1.0f);
+    c[ImGuiCol_Button] = ImVec4(0.16f, 0.20f, 0.28f, 1.0f);
     c[ImGuiCol_ButtonHovered] = ImVec4(0.22f, 0.30f, 0.42f, 1.0f);
     c[ImGuiCol_ButtonActive] = ImVec4(0.26f, 0.38f, 0.54f, 1.0f);
-    c[ImGuiCol_Border] = ImVec4(0.42f, 0.47f, 0.58f, 1.0f);
-    c[ImGuiCol_FrameBg] = ImVec4(0.15f, 0.17f, 0.23f, 1.0f);
-    c[ImGuiCol_FrameBgHovered] = ImVec4(0.20f, 0.23f, 0.30f, 1.0f);
-    c[ImGuiCol_FrameBgActive] = ImVec4(0.24f, 0.28f, 0.36f, 1.0f);
+    c[ImGuiCol_Border] = ImVec4(0.30f, 0.34f, 0.44f, 1.0f);
+    c[ImGuiCol_FrameBg] = ImVec4(0.13f, 0.15f, 0.20f, 1.0f);
+    c[ImGuiCol_FrameBgHovered] = ImVec4(0.18f, 0.21f, 0.28f, 1.0f);
+    c[ImGuiCol_FrameBgActive] = ImVec4(0.22f, 0.26f, 0.34f, 1.0f);
     c[ImGuiCol_CheckMark] = ImVec4(0.40f, 0.78f, 1.0f, 1.0f);
-    c[ImGuiCol_SliderGrab] = ImVec4(0.40f, 0.70f, 0.95f, 1.0f);
+    c[ImGuiCol_SliderGrab] = ImVec4(0.30f, 0.52f, 0.78f, 0.80f);
     c[ImGuiCol_SliderGrabActive] = ImVec4(0.52f, 0.80f, 1.0f, 1.0f);
     c[ImGuiCol_Separator] = ImVec4(0.20f, 0.23f, 0.30f, 1.0f);
-    c[ImGuiCol_TableBorderLight] = ImVec4(0.15f, 0.17f, 0.22f, 1.0f);
-    c[ImGuiCol_TableBorderStrong] = ImVec4(0.15f, 0.17f, 0.22f, 1.0f);
+    c[ImGuiCol_TableHeaderBg] = ImVec4(0.12f, 0.14f, 0.19f, 1.0f);
+    c[ImGuiCol_TableBorderLight] = ImVec4(0.17f, 0.19f, 0.25f, 1.0f);
+    c[ImGuiCol_TableBorderStrong] = ImVec4(0.17f, 0.19f, 0.25f, 1.0f);
 }
 
 void App::drawPanel() {
@@ -87,216 +175,22 @@ void App::drawPanel() {
     ImGui::Begin("controls", nullptr,
                  ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
                      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings);
-    const float full = ImGui::GetContentRegionAvail().x;
-    char b[160];
+    panelScrollMax = ImGui::GetScrollMaxY();
+    panelOverflow = panelScrollMax > 1.0f;  // from the previous frame's content size
 
-    // ---- Mode ----
-    if (ImGui::CollapsingHeader("Mode", ImGuiTreeNodeFlags_DefaultOpen)) {
-        int m = mode == vis::Mode::Brute ? 0 : 1;
-        bool changed = false;
-        changed |= ImGui::RadioButton("Baseline: every ray tests every wall", &m, 0);
-        changed |= ImGui::RadioButton("Grid: rays walk cells, test only walls registered there", &m, 1);
-        if (changed && (m == 0) != (mode == vis::Mode::Brute)) toggleMode();
+    const char* levels[] = {"Simple", "Engine details"};
+    int d = detail == Detail::Engine ? 1 : 0;
+    if (segmented(*this, levels, 2, 2, d, 24.0f)) detail = d == 1 ? Detail::Engine : Detail::Simple;
+    explainerCard(*this);
+    methodCard(*this);
+    showCard(*this);
+    drawWorkMeter(*this);
+    scenesCard(*this);
+    if (detail == Detail::Engine) {
+        ImGui::Dummy({0, 4.0f * uiScale});
+        drawEngineDetails(*this);
     }
-
-    // ---- Scene ----
-    if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen)) {
-        const float half = (full - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
-        if (button(*this, "Reset demo", {half, 0})) resetDemo();
-        ImGui::SameLine();
-        if (button(*this, "Clear walls", {half, 0})) clearWalls();
-        if (button(*this, "Scatter - favourable", {half, 0})) loadScene(vis::SceneKind::Scatter);
-        ImGui::SameLine();
-        if (button(*this, "Maze - mixed", {half, 0})) loadScene(vis::SceneKind::Maze);
-        if (button(*this, "Long walls - unfavourable", {half, 0})) loadScene(vis::SceneKind::LongWalls);
-        ImGui::SameLine();
-        if (button(*this, "Cluster - unfavourable", {half, 0})) loadScene(vis::SceneKind::Cluster);
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted("walls");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(full * 0.30f);
-        if (ImGui::InputInt("##walls", &stressWalls, 0)) stressWalls = std::clamp(stressWalls, 100, 5000);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Stress scene wall count, 100-5000. Same count + seed = same scene.");
-        ImGui::SameLine();
-        ImGui::TextUnformatted("seed");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(full * 0.30f);
-        if (ImGui::InputInt("##seed", &seed, 0)) seed = std::max(seed, 0);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Stress scene seed. Same count + seed = same scene.");
-    }
-
-    // ---- Overlay ----
-    if (ImGui::CollapsingHeader("Overlay", ImGuiTreeNodeFlags_DefaultOpen)) {
-        int o = static_cast<int>(overlay);
-        bool changed = false;
-        changed |= ImGui::RadioButton("Off", &o, 0);
-        ImGui::SameLine();
-        changed |= ImGui::RadioButton("Grid cells", &o, 1);
-        changed |= ImGui::RadioButton("Probe ray", &o, 2);
-        ImGui::SameLine();
-        changed |= ImGui::RadioButton("All rays", &o, 3);
-        if (changed) {
-            overlay = static_cast<Overlay>(o);
-            dirty = true;
-        }
-        ImGui::Checkbox("Outline visibility polygon", &outline);
-        if (overlay == Overlay::Probe) {
-            if (const vis::Trace::RayRecord* pr = probe()) {
-                const vis::Trace::RayRecord& r = *pr;
-                if (ImGui::BeginTable("probe", 2)) {
-                    ImGui::TableSetupColumn("k", ImGuiTableColumnFlags_WidthStretch, 1.1f);
-                    ImGui::TableSetupColumn("v", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-                    std::snprintf(b, sizeof b, "%u", r.cellEnd - r.cellBegin);
-                    kv(*this, "Cells walked", b);
-                    std::snprintf(b, sizeof b, "%zu of %zu", probeWalls(r), scene.wallCount());
-                    kv(*this, "Walls tested", b);
-                    std::snprintf(b, sizeof b, "%.4f", r.tMinus);
-                    kv(*this, "tMinus", b, "limit of the nearest hit from the clockwise side (units of the ray vector)");
-                    std::snprintf(b, sizeof b, "%.4f", r.tPlus);
-                    kv(*this, "tPlus", b, "limit of the nearest hit from the counter-clockwise side");
-                    ImGui::EndTable();
-                }
-            } else {
-                sectionNote("Move the cursor over the canvas to pick a ray.");
-            }
-        }
-    }
-
-    // ---- Dashboard ----
-    if (ImGui::CollapsingHeader("Dashboard", ImGuiTreeNodeFlags_DefaultOpen)) {
-        const ModeStats& cur = stats[static_cast<int>(mode)];
-        const vis::VisibilityStats& st = result.stats;
-        const vis::RebuildStats& rb = scene.lastRebuild();
-        if (ImGui::BeginTable("dash", 2)) {
-            ImGui::TableSetupColumn("k", ImGuiTableColumnFlags_WidthStretch, 1.1f);
-            ImGui::TableSetupColumn("v", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            std::snprintf(b, sizeof b, "%.1f ms  %.0f fps", frameMs, 1000.0 / std::max(frameMs, 0.01));
-            kv(*this, "Frame", b, vsync ? "Whole frame incl. rendering and GUI, smoothed. Vsync is on, so it is capped by the display."
-                                        : "Whole frame incl. rendering and GUI, smoothed. Vsync is off.");
-            std::snprintf(b, sizeof b, "%.1f us", cur.total.median());
-            kv(*this, "Query", b, "Median of the last 60 timed queries: sort + cast + emit. Excludes overlay tracing and drawing.");
-            std::snprintf(b, sizeof b, "%.1f / %.1f", cur.sort.median(), cur.cast.median());
-            kv(*this, "  sort / cast (us)", b);
-            std::snprintf(b, sizeof b, "%zu + 4", scene.userWallCount());
-            kv(*this, "Walls", b, "user walls + 4 boundary walls");
-            std::snprintf(b, sizeof b, "%zu", scene.intersections().size());
-            kv(*this, "Crossings k", b, "pairwise proper intersections");
-            std::snprintf(b, sizeof b, "%zu", scene.targets().size());
-            kv(*this, "Targets T", b, "de-duplicated endpoints + crossings");
-            std::snprintf(b, sizeof b, "%llu", static_cast<unsigned long long>(st.raysCast));
-            kv(*this, "Rays cast", b);
-            std::snprintf(b, sizeof b, "%llu", static_cast<unsigned long long>(st.wallTests));
-            kv(*this, "Wall tests", b, "actual rayHit calls");
-            std::snprintf(b, sizeof b, "%llu", static_cast<unsigned long long>(st.cellsVisited));
-            kv(*this, "Cells walked", b, "0 in Baseline");
-            std::snprintf(b, sizeof b, "%zu", result.polygon.size());
-            kv(*this, "Polygon vertices", b);
-            ImGui::EndTable();
-        }
-        ImGui::Spacing();
-        ImGui::TextDisabled("Last edit cost (paid on edit, not per frame)");
-        if (ImGui::BeginTable("edit", 2)) {
-            ImGui::TableSetupColumn("k", ImGuiTableColumnFlags_WidthStretch, 1.1f);
-            ImGui::TableSetupColumn("v", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            std::snprintf(b, sizeof b, "%.1f us", rb.gridBuildUs);
-            kv(*this, "Grid rebuild", b);
-            std::snprintf(b, sizeof b, "%.1f us", rb.intersectUs);
-            kv(*this, "Crossings + targets", b);
-            ImGui::EndTable();
-        }
-        ImGui::Spacing();
-        if (ImGui::Checkbox("Compare both modes", &compare)) dirty = true;
-        if (compare) {
-            const ModeStats& base = stats[0];
-            const ModeStats& grid = stats[1];
-            if (ImGui::BeginTable("cmp", 3)) {
-                ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthStretch, 0.8f);
-                ImGui::TableSetupColumn("Baseline", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-                ImGui::TableSetupColumn("Grid", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-                ImGui::TableHeadersRow();
-                ImGui::TableNextRow();
-                ImGui::TableSetColumnIndex(0);
-                ImGui::TextUnformatted("query us");
-                ImGui::PushFont(monoFont, 0.0f);
-                ImGui::TableSetColumnIndex(1);
-                ImGui::Text("%.1f", base.total.median());
-                ImGui::TableSetColumnIndex(2);
-                ImGui::Text("%.1f", grid.total.median());
-                ImGui::PopFont();
-                ImGui::TableNextRow();
-                ImGui::TableSetColumnIndex(0);
-                ImGui::TextUnformatted("wall tests");
-                ImGui::PushFont(monoFont, 0.0f);
-                ImGui::TableSetColumnIndex(1);
-                ImGui::Text("%llu", static_cast<unsigned long long>(base.last.wallTests));
-                ImGui::TableSetColumnIndex(2);
-                ImGui::Text("%llu", static_cast<unsigned long long>(grid.last.wallTests));
-                ImGui::PopFont();
-                ImGui::EndTable();
-            }
-            const double bm = base.total.median(), gm = grid.total.median();
-            ImGui::Text("Baseline / Grid time: ");
-            ImGui::SameLine();
-            ImGui::PushFont(monoFont, 0.0f);
-            ImGui::Text("%.1fx", gm > 0 ? bm / gm : 0.0);
-            ImGui::PopFont();
-            const bool ok = identical;
-            ImGui::TextUnformatted("Outputs identical: ");
-            ImGui::SameLine();
-            ImGui::TextColored(ok ? ImVec4(0.45f, 0.9f, 0.55f, 1) : ImVec4(1, 0.4f, 0.4f, 1), ok ? "yes" : "NO");
-            sectionNote("Runs both back ends on every query (not every frame): the work per query is higher while enabled.");
-        }
-    }
-
-    // ---- Grid ----
-    if (ImGui::CollapsingHeader("Grid")) {
-        bool a = autoGrid;
-        if (ImGui::Checkbox("Automatic resolution", &a)) {
-            autoGrid = a;
-            applyGridSettings();
-        }
-        ImGui::BeginDisabled(autoGrid);
-        bool edited = false;
-        ImGui::SetNextItemWidth(full * 0.62f);
-        edited |= ImGui::SliderInt("cols", &gridCols, 1, 256, "%d", ImGuiSliderFlags_Logarithmic);
-        ImGui::SetNextItemWidth(full * 0.62f);
-        edited |= ImGui::SliderInt("rows", &gridRows, 1, 256, "%d", ImGuiSliderFlags_Logarithmic);
-        ImGui::EndDisabled();
-        if (edited && !autoGrid) applyGridSettings();
-        const vis::Grid& g = scene.grid();
-        if (ImGui::BeginTable("grid", 2)) {
-            ImGui::TableSetupColumn("k", ImGuiTableColumnFlags_WidthStretch, 1.1f);
-            ImGui::TableSetupColumn("v", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            std::snprintf(b, sizeof b, "%d x %d", g.cols(), g.rows());
-            kv(*this, "Cells", b);
-            std::snprintf(b, sizeof b, "%.1f x %.1f", g.cellWidth(), g.cellHeight());
-            kv(*this, "Cell size (world)", b);
-            std::snprintf(b, sizeof b, "%zu", g.registrations());
-            kv(*this, "Registrations", b, "(wall, cell) pairs in the grid");
-            std::snprintf(b, sizeof b, "%zu", maxCellWalls);
-            kv(*this, "Max walls in a cell", b);
-            ImGui::EndTable();
-        }
-    }
-
-    // ---- Controls ----
-    if (ImGui::CollapsingHeader("Controls")) {
-        const char* lines[] = {
-            "Drag the light handle      move the light",
-            "Drag on empty canvas       draw a wall",
-            "  + Shift                  snap to wall ends",
-            "Right-click a wall         delete it",
-            "Tab / M                    Baseline <-> Grid",
-            "R                          reset demo",
-            "C                          clear walls",
-            "O                          cycle overlay",
-            "1 2 3 4                    stress scenes",
-            "Esc                        cancel wall",
-        };
-        ImGui::PushFont(monoFont, 0.0f);
-        for (const char* l : lines) ImGui::TextUnformatted(l);
-        ImGui::PopFont();
-    }
+    panelSlack = ImGui::GetWindowHeight() - ImGui::GetCursorPosY() - ImGui::GetStyle().WindowPadding.y;
     ImGui::End();
 }
 
@@ -311,7 +205,7 @@ void App::drawStatusLine() {
     if (now < statusUntil && !status.empty()) {
         ImGui::TextColored(statusIsError ? ImVec4(1.0f, 0.55f, 0.45f, 1) : ImVec4(0.55f, 0.85f, 1.0f, 1), "%s", status.c_str());
     } else {
-        ImGui::TextDisabled("Drag the light or draw walls. Right-click deletes. Tab: mode, O: overlay, R: reset.");
+        ImGui::TextDisabled("Keys: Tab switches method \u00B7 O changes what to show \u00B7 1-4 scenes \u00B7 R reset \u00B7 C clear walls");
     }
     ImGui::End();
     ImGui::PopStyleColor();
