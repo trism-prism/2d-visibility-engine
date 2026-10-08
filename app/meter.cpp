@@ -13,7 +13,7 @@ using namespace ui;
 std::string App::meterVerdict() const {
     if (!meter.valid || meter.baselineTests == 0) return {};
     if (!meter.gridKnown())
-        return "Not measured: this scene is too heavy to measure alongside “Check every wall”. Switch to the grid to see it.";
+        return "Not measured: switch to the grid to see it.";
     const double ratio = static_cast<double>(meter.gridTests) / static_cast<double>(meter.baselineTests);
     const long pct = std::lround(ratio * 100.0);
     if (ratio >= 0.9) {
@@ -34,7 +34,7 @@ namespace {
 // One labelled bar. `value` is on the shared scale [0, maxValue]; a non-zero value never draws
 // narrower than 3 px, its true number is printed in the row above.
 void bar(App& app, const char* label, const std::string& number, std::uint64_t value, std::uint64_t maxValue,
-         ImU32 accent, bool active, bool known, const char* unknownText) {
+         ImU32 accent, bool active, bool known) {
     const float ui = app.uiScale;
     ImDrawList* dl = ImGui::GetWindowDrawList();
     const float w = cardWidth();
@@ -71,8 +71,6 @@ void bar(App& app, const char* label, const std::string& number, std::uint64_t v
     } else {
         for (float x = b0.x; x < b1.x; x += 8.0f * ui)
             dl->AddLine({x, b1.y - 1.0f}, {std::min(x + 4.0f * ui, b1.x), b1.y - 1.0f}, kTextDim, 1.0f);
-        FontScope f(app, 12.0f);
-        dl->AddText({b0.x + 6.0f * ui, b0.y - 1.0f * ui}, kTextDim, unknownText);
     }
     ImGui::Dummy({w, lineH + 3.0f * ui + barH});
 }
@@ -89,9 +87,8 @@ void drawWorkMeter(App& app) {
     }
     const bool brute = app.mode == vis::Mode::Brute;
     const std::uint64_t maxV = std::max<std::uint64_t>(1, std::max(m.baselineTests, m.gridKnown() ? m.gridTests : 0));
-    bar(app, "Check every wall", fmtInt(m.baselineTests), m.baselineTests, maxV, kAmber, brute, true, "");
-    bar(app, "Use the grid", m.gridKnown() ? fmtInt(m.gridTests) : "not measured", m.gridTests, maxV, kCyan, !brute, m.gridKnown(),
-        "switch to the grid to measure");
+    bar(app, "Check every wall", fmtInt(m.baselineTests), m.baselineTests, maxV, kAmber, brute, true);
+    bar(app, "Use the grid", m.gridKnown() ? fmtInt(m.gridTests) : "not measured", m.gridTests, maxV, kCyan, !brute, m.gridKnown());
     cardTextSmall(app, kTextDim, "%s rays × %s walls = %s checks", fmtInt(m.rays).c_str(), fmtInt(m.walls).c_str(),
                   fmtInt(m.baselineTests).c_str());
     tooltip(gloss::wallTest);
