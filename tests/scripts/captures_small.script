@@ -1,0 +1,15 @@
+# 900x600 review capture (run with --size 900x600): tour step 3 (legend + tour card stacked, condensed legend).
+set tour on
+wait 5
+move @Next
+down left
+up left
+wait 3
+move @Next
+down left
+up left
+wait 3
+wmove 1100 300
+wait 4
+capture build/captures/size_900x600.bmp
+quit
