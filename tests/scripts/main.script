@@ -72,8 +72,7 @@ expect walls == 55
 expect status has The outer walls can't be removed
 
 # --- a user wall on the world edge (within a fraction of a pixel of the boundary wall) is deletable:
-# user walls are picked before the boundary wall next to them. (Injected mouse positions arrive
-# truncated to whole pixels, so an exact tie with the boundary cannot be produced through the script.)
+# user walls are picked before the boundary wall next to them. (The exact tie is tested further down.)
 wmove 1 380
 down left
 wmove 1 560
@@ -88,6 +87,30 @@ wait 2
 log
 expect walls == 55
 expect status has Wall removed
+
+# --- exact tie: a user wall drawn with Shift from corner to corner snaps onto the top boundary wall
+# (same end points). The user wall is picked first, so one right-click removes it; the next click
+# on the same spot reaches the boundary wall and is refused.
+shift on
+wmove 2 2
+down left
+wmove 1598 2
+up left
+shift off
+wait 2
+expect walls == 56
+wmove 800 0
+wait 2
+down right
+up right
+wait 2
+expect walls == 55
+expect status has Wall removed
+down right
+up right
+wait 2
+expect walls == 55
+expect status has The outer walls can't be removed
 
 # --- clicking on the panel (empty area and a button) must not create a wall
 save poly2 poly_hash

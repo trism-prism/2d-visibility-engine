@@ -49,4 +49,10 @@ if(VIS_BUILD_TESTS)
     COMMAND vis_app --size 1280x800 --script ${CMAKE_SOURCE_DIR}/tests/scripts/main.script
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
   set_tests_properties(app_script PROPERTIES LABELS app TIMEOUT 900)
+
+  # A script that cannot be loaded must shut down cleanly with exit code 2.
+  add_test(NAME app_script_missing
+    COMMAND ${CMAKE_COMMAND} -DAPP=$<TARGET_FILE:vis_app>
+            -P ${CMAKE_SOURCE_DIR}/tests/scripts/expect_script_load_failure.cmake)
+  set_tests_properties(app_script_missing PROPERTIES LABELS app TIMEOUT 120)
 endif()

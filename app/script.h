@@ -11,6 +11,7 @@
 //                                                world coordinates (through the app's real transform)
 //   down left|right, up left|right               mouse buttons
 //   key Tab|R|C|O|M|1|2|3|4|Escape               press and release
+//   shift on|off                                 hold / release Shift (snap while drawing)
 //   wait N                                       N frames
 //   capture file.bmp                             save the framebuffer of the current frame
 //   log                                          print one state line

@@ -141,6 +141,11 @@ bool Script::tick(App& app, ImGuiIO& io) {
             wait_ = 3;
             return true;
         }
+        if (op == "shift") {  // hold or release Shift (snaps a drawn wall's end points)
+            io.AddKeyEvent(ImGuiMod_Shift, arg(1) == "on");
+            wait_ = 2;
+            return true;
+        }
         if (op == "wait") {
             wait_ = std::atoi(arg(1).c_str());
             return true;
