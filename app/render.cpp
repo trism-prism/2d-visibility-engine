@@ -284,14 +284,20 @@ void drawCanvas(ImDrawList* dl, const App& app) {
     // Dense scenes: lower the opacity too (about 250/n above 400 walls, floor 0.12), so overlapping
     // walls stay distinguishable and the lit region and light handle remain visible underneath/on top.
     const float density = static_cast<float>(scene.userWallCount());
-    const float wallAlpha = density > 400.0f ? std::clamp(250.0f / density, 0.12f, 1.0f) : 1.0f;
+    float wallAlpha = density > 400.0f ? std::clamp(250.0f / density, 0.12f, 1.0f) : 1.0f;
+    // Long walls cover the room with ink whatever their number (1,000 Long walls = 45x the length of
+    // 1,000 Scatter walls), so the opacity also follows the total drawn length.
+    double inkLength = 0.0;
+    for (std::size_t i = vis::Scene::kBoundaryWalls; i < walls.size(); ++i)
+        inkLength += std::hypot(walls[i].b.x - walls[i].a.x, walls[i].b.y - walls[i].a.y);
+    if (inkLength > 60000.0) wallAlpha = std::min(wallAlpha, std::clamp(static_cast<float>(60000.0 / inkLength), 0.05f, 1.0f));
     const ImU32 wallColour = withAlpha(kWall, static_cast<int>(255.0f * wallAlpha));
     for (std::size_t i = vis::Scene::kBoundaryWalls; i < walls.size(); ++i) {
         ImU32 col = wallColour;
         float w = wallW;
         if (probing) {
             if (tested[i]) { col = kTested; w = wallW * 1.3f; }
-            else col = kWallMuted;
+            else col = withAlpha(kWallMuted, static_cast<int>(150.0f * std::max(wallAlpha, 0.2f)));  // skipped walls fade in dense scenes
         }
         if (static_cast<int>(i) == app.hoverWall) { col = kDelete; w = wallW * 1.8f; }
         dl->AddLine(app.view.toScreen(walls[i].a), app.view.toScreen(walls[i].b), col, w);

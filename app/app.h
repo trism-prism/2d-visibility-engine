@@ -69,7 +69,7 @@ struct ModeStats {
 //   and tests_brute == rays * wallCount is checked by the interaction script.
 //   gridTests     = wall tests the Grid method needs for this same light position. Measured by the
 //   timed Grid query when Grid is active (or in Compare); with Baseline active it comes from an extra
-//   Grid pass that is never timed (and is skipped when the scene is too heavy for that).
+//   Grid pass that is never timed (on a heavy scene it waits until the light stops moving).
 struct WorkMeter {
     enum class GridSource { Measured, ExtraPass, Skipped };
     bool valid = false;
@@ -192,7 +192,7 @@ struct App {
     const vis::Trace::RayRecord* probe() const;  // the probe ray, or nullptr if none / not valid for this trace
     std::size_t probeWalls(const vis::Trace::RayRecord& r) const;  // walls tested by that ray
     void updateVisibility();                    // timed query (+ compare, + untimed passes)
-    void updateMeter();                         // work meter + slow-scene estimate for the latest query
+    void updateMeter(bool moving);                       // work meter + slow-scene estimate for the latest query
     void frame(ImGuiIO& io, double time);       // layout, input, visibility; call after NewFrame
     void drawPanel();                           // ui.cpp
     void drawStatusLine();                      // ui.cpp

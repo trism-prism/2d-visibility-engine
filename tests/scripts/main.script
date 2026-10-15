@@ -365,9 +365,10 @@ expect scene == longwalls
 expect slow_note == yes
 expect slow_ms > 30
 expect slow_text has Slow with
-expect meter_source == skipped
-expect meter_grid == unknown
-# the tallest Simple panel (slow note plus "not measured") still fits 1280 x 800 with room to spare
+# heavy scene: the grid figure is measured by one extra pass once the light has stopped
+expect meter_source == extra_pass
+expect meter_grid != unknown
+# the tallest Simple panel (slow note plus the grid bar) still fits 1280 x 800 with room to spare
 expect panel_overflow == no
 expect panel_slack > 15
 save prod3 rays_x_walls

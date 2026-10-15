@@ -13,7 +13,7 @@ using namespace ui;
 std::string App::meterVerdict() const {
     if (!meter.valid || meter.baselineTests == 0) return {};
     if (!meter.gridKnown())
-        return "Not measured: switch to the grid to see it.";
+        return "Measuring when you stop.";
     const double ratio = static_cast<double>(meter.gridTests) / static_cast<double>(meter.baselineTests);
     const long pct = std::lround(ratio * 100.0);
     if (ratio >= 0.9) {

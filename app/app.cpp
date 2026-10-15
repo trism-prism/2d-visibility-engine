@@ -361,6 +361,7 @@ void App::refreshGridInfo() {
 void App::updateVisibility() {
     refreshGridInfo();
     if (!dirty && settle <= 0) return;
+    const bool moving = dirty;  // this update follows a change (the light or the scene)
     if (dirty) settle = 8;  // repeat a few frames: more real samples for the median
     else --settle;
     dirty = false;
@@ -396,8 +397,11 @@ void App::updateVisibility() {
     } else {
         runCurrent();
     }
+    // Slow updates (over 50 ms) need no repeats for the median; one more update is enough to finish the
+    // meter. Without this a heavy scene keeps the app busy for 8 full updates after every change.
+    if (result.stats.totalUs > 50'000.0) settle = std::min(settle, 1);
     polyHash = fnv(result.polygon);
-    updateMeter();
+    updateMeter(moving);
 
     // Untimed pass with tracing, only when an overlay reads it.
     if (overlay != Overlay::Off) vis::computeVisibility(scene, light, mode, traceResult, &trace);
@@ -406,10 +410,11 @@ void App::updateVisibility() {
 
 // Work meter and slow-scene estimate. Everything here is either arithmetic on counters of the timed
 // query or an untimed pass whose timings are discarded.
-void App::updateMeter() {
+void App::updateMeter(bool moving) {
     // Above this many Baseline wall tests (an update of well over 100 ms) the extra untimed Grid pass is
-    // not run, so "Check every wall" never gets slower for the meter's sake. A work count, not a timing,
-    // so the decision is the same on every machine and every run.
+    // not run while things change, so "Check every wall" never gets slower for the meter's sake. It runs
+    // once the update is a repeat of an unchanged state (the first one after the change), so the grid
+    // figure still appears. A work count, not a timing, so the decision is the same on every machine.
     constexpr std::uint64_t kMeterSkipTests = 20'000'000;
     constexpr double kSlowMs = 30.0;          // below ~30 updates per second
     meter.valid = true;
@@ -422,7 +427,7 @@ void App::updateMeter() {
     } else if (haveOther) {
         meter.gridTests = otherResult.stats.wallTests;
         meter.gridSource = WorkMeter::GridSource::Measured;
-    } else if (meter.baselineTests <= kMeterSkipTests) {
+    } else if (meter.baselineTests <= kMeterSkipTests || !moving) {
         vis::computeVisibility(scene, light, vis::Mode::Grid, meterResult);  // never added to any statistic
         meter.gridTests = meterResult.stats.wallTests;
         meter.gridSource = WorkMeter::GridSource::ExtraPass;
