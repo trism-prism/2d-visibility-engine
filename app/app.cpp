@@ -23,11 +23,11 @@ const char* overlayName(Overlay o) {
 
 namespace {
 const SceneInfo kSceneInfos[] = {
-    {vis::SceneKind::Demo, "Demo room", "A small hand-built room. Good for drawing your own walls.", "R"},
-    {vis::SceneKind::Scatter, "Scattered walls", "Many short walls spread out evenly. The grid's best case.", "1"},
-    {vis::SceneKind::Maze, "Maze", "Rooms and corridors with doors, plus a few long diagonals.", "2"},
-    {vis::SceneKind::LongWalls, "Long walls", "Long walls that cross each other a lot. Hard for both methods.", "3"},
-    {vis::SceneKind::Cluster, "Tight cluster", "Everything packed into one corner. The grid helps least here.", "4"},
+    {vis::SceneKind::Demo, "Demo", "Hand-built. Good for drawing.", "R"},
+    {vis::SceneKind::Scatter, "Scatter", "Many short walls. Grid's best case.", "1"},
+    {vis::SceneKind::Maze, "Maze", "Rooms, corridors, a few diagonals.", "2"},
+    {vis::SceneKind::LongWalls, "Long walls", "Long, crossing walls. Hard for both.", "3"},
+    {vis::SceneKind::Cluster, "Cluster", "All in one corner. Grid helps least.", "4"},
 };
 std::string wallsPhrase(std::size_t n) { return ui::fmtInt(n) + (n == 1 ? " wall" : " walls"); }
 }  // namespace
@@ -76,11 +76,11 @@ std::uint64_t fnv(const std::vector<Vec2>& poly) {
 
 const char* statusText(vis::AddStatus s) {
     switch (s) {
-        case vis::AddStatus::Added: return "Wall added";
-        case vis::AddStatus::RejectedNonFinite: return "That wall can't be added (invalid position)";
-        case vis::AddStatus::RejectedOutside: return "That wall is outside the room";
-        case vis::AddStatus::RejectedTooShort: return "That wall is too short to add";
-        case vis::AddStatus::RejectedTooLarge: return "That wall can't be added (too far away)";
+        case vis::AddStatus::Added: return "Added";
+        case vis::AddStatus::RejectedNonFinite: return "Invalid position";
+        case vis::AddStatus::RejectedOutside: return "Outside the room";
+        case vis::AddStatus::RejectedTooShort: return "Too short";
+        case vis::AddStatus::RejectedTooLarge: return "Too far away";
     }
     return "?";
 }
@@ -130,22 +130,22 @@ void App::loadScene(vis::SceneKind k) {
         light = vis::chooseLight(scene, preferred);
     }
     sceneChanged();
-    if (k == vis::SceneKind::Demo) setStatus("Demo room loaded", false);
-    else setStatus(std::string(sceneInfo(k).name) + ": " + wallsPhrase(scene.userWallCount()), false);
+    if (k == vis::SceneKind::Demo) setStatus("Demo loaded", false);
+    else setStatus(std::string(sceneInfo(k).name) + " \u00B7 " + wallsPhrase(scene.userWallCount()), false);
 }
 
 void App::clearWalls() {
     scene.clear();
     drawing = false;
     sceneChanged();
-    setStatus("All walls removed", false);
+    setStatus("Cleared", false);
 }
 
 void App::setMode(vis::Mode m) {
     if (m == mode) return;
     mode = m;
     dirty = true;
-    setStatus(mode == vis::Mode::Grid ? "Now using the grid" : "Now checking every wall", false);
+    setStatus(mode == vis::Mode::Grid ? "Grid" : "All walls", false);
 }
 
 void App::toggleMode() { setMode(mode == vis::Mode::Grid ? vis::Mode::Brute : vis::Mode::Grid); }
@@ -153,7 +153,7 @@ void App::toggleMode() { setMode(mode == vis::Mode::Grid ? vis::Mode::Brute : vi
 void App::setOverlay(Overlay o) {
     overlay = o;
     dirty = true;  // the trace is only recorded while an overlay needs it
-    static const char* const names[] = {"Showing the light only", "Showing the grid", "Following one ray", "Showing every ray"};
+    static const char* const names[] = {"Light only", "Squares", "One ray", "All rays"};
     setStatus(names[static_cast<int>(o)], false);
 }
 
@@ -168,7 +168,7 @@ float App::grabRadius() const {
 void App::cancelWall() {
     if (drawing) {
         drawing = false;
-        setStatus("Wall cancelled", false);
+        setStatus("Cancelled", false);
     }
 }
 
@@ -273,7 +273,7 @@ void App::handleInput(ImGuiIO& io) {
             const vis::AddStatus st = scene.addWall(drawStart, drawEnd);
             if (st == vis::AddStatus::Added) {
                 sceneChanged();
-                setStatus("Wall added \u2014 " + wallsPhrase(scene.userWallCount()) + " in the room", false);
+                setStatus("Added \u00B7 " + wallsPhrase(scene.userWallCount()), false);
             } else {
                 setStatus(statusText(st), true);
             }
@@ -284,9 +284,9 @@ void App::handleInput(ImGuiIO& io) {
             scene.removeWall(static_cast<std::size_t>(hoverWall));
             hoverWall = -1;
             sceneChanged();
-            setStatus("Wall removed \u2014 " + wallsPhrase(scene.userWallCount()) + " in the room", false);
+            setStatus("Removed \u00B7 " + wallsPhrase(scene.userWallCount()), false);
         } else if (hoverBoundary) {
-            setStatus("The outer walls can't be removed", true);
+            setStatus("Outer walls stay", true);
         }
     }
 
@@ -412,7 +412,7 @@ void App::updateVisibility() {
 // query or an untimed pass whose timings are discarded.
 void App::updateMeter(bool moving) {
     // Above this many Baseline wall tests (an update of well over 100 ms) the extra untimed Grid pass is
-    // not run while things change, so "Check every wall" never gets slower for the meter's sake. It runs
+    // not run while things change, so "All walls" never gets slower for the meter's sake. It runs
     // once the update is a repeat of an unchanged state (the first one after the change), so the grid
     // figure still appears. A work count, not a timing, so the decision is the same on every machine.
     constexpr std::uint64_t kMeterSkipTests = 20'000'000;
@@ -458,28 +458,28 @@ void App::updateMeter(bool moving) {
 
 std::string App::slowNote() const {
     if (!slowBaseline) return {};
-    return "Slow with \u201CCheck every wall\u201D: about " + ui::fmtNum(baselineEstMs, 0) + " ms per update.";
+    return "All walls is slow here: ~" + ui::fmtNum(baselineEstMs, 0) + " ms per update.";
 }
 
 std::string App::overlayCaption() const {
     switch (overlay) {
-        case Overlay::Off: return "Just the lit area.";
+        case Overlay::Off: return "Lit area only.";
         case Overlay::Grid:
             if (mode == vis::Mode::Brute)
-                return "\u201CCheck every wall\u201D doesn't use the grid, so no squares are tinted. The lines are the rays.";
-            return "The world is split into " + std::to_string(scene.grid().cols()) + " x " + std::to_string(scene.grid().rows()) +
-                   " squares. Brighter squares were crossed by more rays.";
+                return "No grid in All walls. Lines are rays.";
+            return std::to_string(scene.grid().cols()) + " x " + std::to_string(scene.grid().rows()) +
+                   " squares. Brighter = more rays crossed it.";
         case Overlay::Probe: {
             const vis::Trace::RayRecord* r = probe();
-            if (!r) return "Move the mouse over the room to pick a ray.";
+            if (!r) return "Hover the room to pick a ray.";
             const std::size_t tested = probeWalls(*r);
-            if (mode == vis::Mode::Brute) return "This one had to test all " + ui::fmtInt(scene.wallCount()) + " walls.";
+            if (mode == vis::Mode::Brute) return "Tests all " + ui::fmtInt(scene.wallCount()) + " walls.";
             const std::size_t cells = r->cellEnd - r->cellBegin;
-            return "Move the mouse to pick a ray. This one crossed " + ui::fmtInt(cells) + (cells == 1 ? " square" : " squares") +
-                   " and had to test " + ui::fmtInt(tested) + " of " + ui::fmtInt(scene.wallCount()) + " walls.";
+            return "Crosses " + ui::fmtInt(cells) + (cells == 1 ? " square" : " squares") + ", tests " + ui::fmtInt(tested) +
+                   " of " + ui::fmtInt(scene.wallCount()) + " walls.";
         }
         case Overlay::Rays:
-            return ui::fmtInt(trace.rays.size()) + " rays, one aimed at each direction where a wall ends or two walls cross.";
+            return ui::fmtInt(trace.rays.size()) + " rays: one per wall end or crossing.";
     }
     return {};
 }

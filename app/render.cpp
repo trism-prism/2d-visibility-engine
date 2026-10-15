@@ -329,13 +329,13 @@ void drawCanvas(ImDrawList* dl, const App& app) {
             dl->AddText(at, col, name);
         };
         if (r.tMinus == r.tPlus) {
-            marker(r.tMinus, ui::kGold, "hits here", 1.0f);
+            marker(r.tMinus, ui::kGold, "hit", 1.0f);
         } else {
             // The two sides of the ray end at different walls. The nearer end is where one side stops;
             // the farther end is where the other side's view continues to. Each label sits on its own side.
             const bool minusNear = r.tMinus < r.tPlus;
-            marker(r.tMinus, ui::kGreen, minusNear ? "stops here on this side" : "continues to here on the other side", -1.0f);
-            marker(r.tPlus, ui::kPink, minusNear ? "continues to here on the other side" : "stops here on this side", 1.0f);
+            marker(r.tMinus, ui::kGreen, minusNear ? "stops here" : "other side reaches here", -1.0f);
+            marker(r.tPlus, ui::kPink, minusNear ? "other side reaches here" : "stops here", 1.0f);
         }
     }
 

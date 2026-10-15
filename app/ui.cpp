@@ -26,45 +26,44 @@ void explainerCard(App& app) {
     {
         FontScope f(app, 17.0f);
         ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(kText));
-        ImGui::TextUnformatted("A light in a room of walls");
+        ImGui::TextUnformatted("Light and walls");
         ImGui::PopStyleColor();
     }
     ImGui::SameLine();
     {
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {7.0f * app.uiScale, 1.0f * app.uiScale});
         FontScope small(app, 13.0f);
-        const float bw = ImGui::CalcTextSize("Take the tour").x + 14.0f * app.uiScale;
+        const float bw = ImGui::CalcTextSize("Tour").x + 14.0f * app.uiScale;
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, ImGui::GetContentRegionAvail().x - bw));
-        if (button(app, "Take the tour")) app.tourStart();
+        if (button(app, "Tour")) app.tourStart();
         ImGui::PopStyleVar();
     }
     cardText(IM_COL32(204, 212, 230, 255),
-             "The bright area is exactly what the light can see; the rest is shadow. It updates as soon as anything moves.");
+             "Bright = what the light sees. Updates live.");
     {
         FontScope f(app, 12.0f);
-        cardText(kTextDim, "Drag the light, drag the floor to draw, right-click to remove.");
+        cardText(kTextDim, "Drag the light \u00B7 drag the floor to draw \u00B7 right-click to erase");
     }
     cardEnd(app);
 }
 
 void methodCard(App& app) {
     cardBegin(app, nullptr);
-    const char* titles[] = {"Check every wall", "Use the grid"};
-    const char* subs[] = {"Simple and slow: each ray is tested against all walls. (Baseline)",
-                          "Each ray only tests walls in the squares it crosses. (Grid)"};
+    const char* titles[] = {"All walls", "Grid"};
+    const char* subs[] = {"Baseline: every ray, every wall.", "Each ray tests nearby walls only."};
     const ImU32 accents[] = {kAmber, kCyan};
     const int clicked = methodCards(app, titles, subs, accents, 2, app.mode == vis::Mode::Brute ? 0 : 1);
     if (clicked >= 0) app.setMode(clicked == 0 ? vis::Mode::Brute : vis::Mode::Grid);
-    cardTextSmall(app, kTextDim, "Both give exactly the same picture \u2014 only the amount of work differs.");
+    cardTextSmall(app, kTextDim, "Same picture. Less work.");
     cardEnd(app);
 }
 
 void showCard(App& app) {
-    cardBegin(app, "What to show");
-    const char* labels[] = {"Light only", "The grid", "Follow one ray", "Every ray"};
+    cardBegin(app, "Show");
+    const char* labels[] = {"Light only", "Squares", "One ray", "All rays"};
     int o = static_cast<int>(app.overlay);
     if (segmented(app, labels, 4, 2, o, 23.0f)) app.setOverlay(static_cast<Overlay>(o));
-    ImGui::Checkbox("Outline the lit area", &app.outline);
+    ImGui::Checkbox("Outline", &app.outline);
     helpMarker(gloss::outlinePoints);
     cardText(IM_COL32(204, 212, 230, 255), "%s", app.overlayCaption().c_str());
     if (app.detail == Detail::Engine) drawProbeNumbers(app);
@@ -88,23 +87,23 @@ void scenesCard(App& app) {
     ImGui::SetNextItemWidth(cardWidth() - capW - valW - 2.0f * sp);
     if (ImGui::SliderInt("##walls", &idx, 0, kWallStopCount - 1, " ", ImGuiSliderFlags_NoInput)) app.stressWalls = kWallStops[idx];
     const bool slid = ImGui::IsItemDeactivatedAfterEdit();
-    tooltip("How many walls the generated scenes get (100 to 5,000). Releasing the slider rebuilds the current generated scene.");
+    tooltip("Walls in generated scenes (100-5,000). Release to rebuild.");
     if (slid && app.kind != vis::SceneKind::Demo) app.loadScene(app.kind);
 
     ImGui::SameLine();
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted(fmtInt(static_cast<std::uint64_t>(app.stressWalls)).c_str());
     const float half = (cardWidth() - sp) * 0.5f;
-    if (button(app, "Clear walls", {half, 0})) app.clearWalls();
-    tooltip("Remove every wall you can see (the outer walls stay). Key: C");
+    if (button(app, "Clear", {half, 0})) app.clearWalls();
+    tooltip("Remove all walls. Key: C");
     ImGui::SameLine();
     if (button(app, "Reset", {half, 0})) app.resetDemo();
-    tooltip("Back to the demo room with the light where it started. Key: R");
+    tooltip("Back to the demo. Key: R");
 
     if (app.detail == Detail::Engine) {
         ImGui::AlignTextToFramePadding();
         ImGui::TextUnformatted("Seed");
-        tooltip("The same wall count and seed always give the same scene. Applies when you pick a scene or release the field.");
+        tooltip("Same count + seed = same scene.");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(cardWidth() * 0.4f);
         if (ImGui::InputInt("##seed", &app.seed, 0)) app.seed = std::max(app.seed, 0);
@@ -178,7 +177,7 @@ void App::drawPanel() {
     panelScrollMax = ImGui::GetScrollMaxY();
     panelOverflow = panelScrollMax > 1.0f;  // from the previous frame's content size
 
-    const char* levels[] = {"Simple", "Engine details"};
+    const char* levels[] = {"Simple", "Engine"};
     int d = detail == Detail::Engine ? 1 : 0;
     if (segmented(*this, levels, 2, 2, d, 24.0f)) detail = d == 1 ? Detail::Engine : Detail::Simple;
     explainerCard(*this);
@@ -205,7 +204,7 @@ void App::drawStatusLine() {
     if (now < statusUntil && !status.empty()) {
         ImGui::TextColored(statusIsError ? ImVec4(1.0f, 0.55f, 0.45f, 1) : ImVec4(0.55f, 0.85f, 1.0f, 1), "%s", status.c_str());
     } else {
-        ImGui::TextDisabled("Keys: Tab switches method \u00B7 O changes what to show \u00B7 1-4 scenes \u00B7 R reset \u00B7 C clear walls");
+        ImGui::TextDisabled("Tab method \u00B7 O show \u00B7 1-4 scenes \u00B7 R reset \u00B7 C clear");
     }
     ImGui::End();
     ImGui::PopStyleColor();
