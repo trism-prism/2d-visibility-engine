@@ -91,11 +91,16 @@ void computeVisibility(const Scene& scene, Vec2 lightIn, Mode mode, VisibilityRe
     for (std::size_t i = 0; i < targets.size(); ++i) {
         const Vec2 d = targets[i] - light;
         if (length(d) < kLightClearance) continue;  // also excludes target == light
-        ctx.items.push_back({static_cast<std::uint32_t>(i), halfTurn(light, targets[i])});
+        ctx.items.push_back({static_cast<std::uint32_t>(i), halfTurn(light, targets[i]), d.x, d.y});
     }
     std::sort(ctx.items.begin(), ctx.items.end(),
               [&](const VisibilityContext::SortItem& a, const VisibilityContext::SortItem& b) {
                   if (a.half != b.half) return a.half < b.half;
+                  // Same arithmetic as the filter inside orient(light, a, b), on cached differences.
+                  // Only an inconclusive filter pays for the call; the answer is the exact sign either way.
+                  const double l = a.dx * b.dy, r = a.dy * b.dx;
+                  const double det = l - r;
+                  if (std::fabs(det) > kOrientErrBound * (std::fabs(l) + std::fabs(r))) return det > 0.0;
                   return orient(light, targets[a.target], targets[b.target]) > 0;
               });
     ctx.rays.clear();

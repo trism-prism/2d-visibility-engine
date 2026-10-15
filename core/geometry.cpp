@@ -61,11 +61,6 @@ int orientExact(Vec2 a, Vec2 b, Vec2 c) {
     return e[n - 1] > 0.0 ? 1 : -1;
 }
 
-// Shewchuk's ccwerrboundA = (3 + 16 eps) eps with eps = 2^-53: when |det| exceeds this fraction of
-// |l|+|r|, the sign of the floating-point det = l - r (l, r from rounded differences and products)
-// is guaranteed to be the exact sign.
-constexpr double kOrientErrBound = (3.0 + 16.0 * 1.1102230246251565e-16) * 1.1102230246251565e-16;
-
 }  // namespace
 
 int orient(Vec2 a, Vec2 b, Vec2 c) {
