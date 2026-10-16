@@ -69,7 +69,7 @@ struct ModeStats {
 //   and tests_brute == rays * wallCount is checked by the interaction script.
 //   gridTests     = wall tests the Grid method needs for this same light position. Measured by the
 //   timed Grid query when Grid is active (or in Compare); with Baseline active it comes from an extra
-//   Grid pass that is never timed (on a heavy scene it waits until the light stops moving).
+//   Grid pass that is never timed (on a heavy scene it waits until the update after a change).
 struct WorkMeter {
     enum class GridSource { Measured, ExtraPass, Skipped };
     bool valid = false;

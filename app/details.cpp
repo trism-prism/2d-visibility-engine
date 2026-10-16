@@ -29,12 +29,12 @@ void compareTable(App& app) {
     const ModeStats& grid = app.stats[1];
     if (ui::beginTable("cmp", 3)) {
         ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthStretch, 0.9f);
-        ImGui::TableSetupColumn("Check every wall", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn("Use the grid", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn("All walls", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn("Grid", ImGuiTableColumnFlags_WidthStretch, 1.0f);
         ImGui::TableHeadersRow();
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
-        ImGui::TextUnformatted("query time");
+        ImGui::TextUnformatted("time");
         ImGui::TableSetColumnIndex(1);
         monoRight(app, fmtDuration(base.total.median()));
         ImGui::TableSetColumnIndex(2);
@@ -50,18 +50,17 @@ void compareTable(App& app) {
         ImGui::EndTable();
     }
     const double bm = base.total.median(), gm = grid.total.median();
-    ImGui::TextUnformatted("Baseline / Grid time: ");
+    ImGui::TextUnformatted("Time ratio: ");
     ImGui::SameLine();
     {
         MonoScope m(app);
         ImGui::Text("%sx", fmtNum(gm > 0 ? bm / gm : 0.0, 1).c_str());
     }
-    ImGui::TextUnformatted("Outputs identical: ");
+    ImGui::TextUnformatted("Identical: ");
     ImGui::SameLine();
     ImGui::TextColored(app.identical ? ImVec4(0.45f, 0.9f, 0.55f, 1) : ImVec4(1, 0.4f, 0.4f, 1), app.identical ? "yes" : "NO");
     cardTextSmall(app, kTextDim,
-                  "Both methods run on every update (not every frame), so the work per update is higher while this is on. "
-                  "Times are separate measurements of each method; the extra untimed passes (overlay trace, meter) are excluded.");
+                  "Both run every update. Timed separately; overlay and meter passes excluded.");
 }
 
 }  // namespace
@@ -90,7 +89,7 @@ void drawEngineDetails(App& app) {
     const vis::VisibilityStats& st = app.result.stats;
     const vis::RebuildStats& rb = app.scene.lastRebuild();
 
-    cardBegin(app, "Engine numbers");
+    cardBegin(app, "Numbers");
     if (ui::beginTable("dash", 2)) {
         tableColumns();
         kvRow(app, "Frame", (fmtNum(app.frameMs, 1) + " ms  " + fmtNum(1000.0 / std::max(app.frameMs, 0.01), 0) + " fps").c_str(),
@@ -103,30 +102,30 @@ void drawEngineDetails(App& app) {
         kvRow(app, "Targets T", fmtInt(app.scene.targets().size()).c_str(), gloss::target);
         kvRow(app, "Rays cast", fmtInt(st.raysCast).c_str(), gloss::ray);
         kvRow(app, "Wall tests", fmtInt(st.wallTests).c_str(), gloss::wallTest);
-        kvRow(app, "Cells walked", fmtInt(st.cellsVisited).c_str(), gloss::cellsWalked);
+        kvRow(app, "Squares walked", fmtInt(st.cellsVisited).c_str(), gloss::cellsWalked);
         kvRow(app, "Polygon vertices", fmtInt(app.result.polygon.size()).c_str(), gloss::outlinePoints);
         ImGui::EndTable();
     }
     cardEnd(app);
 
-    cardBegin(app, "Last edit cost", gloss::editCost);
+    cardBegin(app, "Edit cost", gloss::editCost);
     if (ui::beginTable("edit", 2)) {
         tableColumns();
         kvRow(app, "Grid rebuild", fmtDuration(rb.gridBuildUs).c_str());
         kvRow(app, "Crossings + targets", fmtDuration(rb.intersectUs).c_str());
         ImGui::EndTable();
     }
-    cardTextSmall(app, kTextDim, "Paid when a wall is added or removed, not on every frame.");
+    cardTextSmall(app, kTextDim, "Paid per edit, not per frame.");
     cardEnd(app);
 
-    cardBegin(app, "Compare both methods", gloss::compare);
-    if (ImGui::Checkbox("Run both and compare", &app.compare)) app.dirty = true;
+    cardBegin(app, "Compare", gloss::compare);
+    if (ImGui::Checkbox("Run both", &app.compare)) app.dirty = true;
     if (app.compare) compareTable(app);
     cardEnd(app);
 
-    cardBegin(app, "Grid resolution", gloss::grid);
+    cardBegin(app, "Grid size", gloss::grid);
     bool a = app.autoGrid;
-    if (ImGui::Checkbox("Automatic resolution", &a)) {
+    if (ImGui::Checkbox("Auto", &a)) {
         app.autoGrid = a;
         app.applyGridSettings();
     }
@@ -143,22 +142,22 @@ void drawEngineDetails(App& app) {
     if (ui::beginTable("grid", 2)) {
         tableColumns();
         kvRow(app, "Squares", (std::to_string(g.cols()) + " x " + std::to_string(g.rows())).c_str(), gloss::square);
-        kvRow(app, "Square size (world)", (fmtNum(g.cellWidth(), 1) + " x " + fmtNum(g.cellHeight(), 1)).c_str());
+        kvRow(app, "Square size", (fmtNum(g.cellWidth(), 1) + " x " + fmtNum(g.cellHeight(), 1)).c_str());
         kvRow(app, "Registrations", fmtInt(g.registrations()).c_str(), gloss::registrations);
-        kvRow(app, "Max walls in a square", fmtInt(app.maxCellWalls).c_str());
+        kvRow(app, "Max per square", fmtInt(app.maxCellWalls).c_str());
         ImGui::EndTable();
     }
     cardEnd(app);
 
     cardBegin(app, "Keys");
     const char* lines[] = {
-        "Tab / M    switch method",
-        "O          cycle what to show",
+        "Tab / M    method",
+        "O          show",
         "1 2 3 4    scenes",
-        "R          reset to demo room",
+        "R          reset",
         "C          clear walls",
-        "Shift      snap wall ends",
-        "Esc        cancel wall / tour",
+        "Shift      snap ends",
+        "Esc        cancel / close tour",
     };
     {
         MonoScope m(app);

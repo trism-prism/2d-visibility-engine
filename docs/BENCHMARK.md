@@ -2,6 +2,8 @@
 
 This document describes `vis_bench`, the headless benchmark in `bench/main.cpp`, and the results committed in `bench/results/`. Every number below is read from `bench/results/results.csv`, `bench/results/grid_sweep.csv` or `bench/results/results.meta.txt` (the run time also from the console log of that run). The architecture and the algorithms are described in [ARCHITECTURE.md](ARCHITECTURE.md).
 
+> **Note (2026-11-13).** The angular sort in `core/visibility.cpp` was sped up after these results were produced: it now caches each target's difference from the light and applies the same floating-point filter as `orient` before falling back to it, so the output is bitwise identical. A throwaway harness (not this benchmark) showed the sort about 30% faster and the total query about 20-30% faster on Scatter and Maze at n=1000. `bench/results/*` and every number in this document were **not** regenerated and predate that change; the sort times and the sort share of the Grid time below are therefore higher than the current code would give, and the full benchmark has not been rerun.
+
 Terms used here:
 
 - **Baseline / Brute**: the mode where every ray tests every wall (`Mode::Brute`).

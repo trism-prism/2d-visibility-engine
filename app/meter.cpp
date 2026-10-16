@@ -1,5 +1,5 @@
 // The work meter: baseline-to-improvement at a glance. Both bars are drawn from WorkMeter, which comes
-// from real counters (see app.h): rays x walls for "Check every wall" (exact arithmetic) and the wall
+// from real counters (see app.h): rays x walls for "All walls" (exact arithmetic) and the wall
 // tests the grid method needs for the current light position.
 #include <algorithm>
 #include <cmath>
@@ -17,16 +17,16 @@ std::string App::meterVerdict() const {
     const double ratio = static_cast<double>(meter.gridTests) / static_cast<double>(meter.baselineTests);
     const long pct = std::lround(ratio * 100.0);
     if (ratio >= 0.9) {
-        std::string s = "The grid saves almost nothing here";
+        std::string s = "Grid saves little";
         const std::size_t user = scene.userWallCount();
         const double perWall = static_cast<double>(scene.grid().registrations()) / static_cast<double>(std::max<std::size_t>(1, scene.wallCount()));
-        if (user >= 20 && maxCellWalls * 5 >= user) s += ": the walls are packed into a few squares.";
-        else if (perWall >= 6.0) s += ": the walls are long, so each one sits in many squares.";
+        if (user >= 20 && maxCellWalls * 5 >= user) s += ": walls packed in few squares.";
+        else if (perWall >= 6.0) s += ": long walls fill many squares.";
         else s += ".";
         return s;
     }
-    if (ratio > 0.0 && pct < 1) return "The grid does less than 1% of the work here.";
-    return "The grid does " + std::to_string(pct) + "% of the work here.";
+    if (ratio > 0.0 && pct < 1) return "Grid: under 1% of the work.";
+    return "Grid: " + std::to_string(pct) + "% of the work.";
 }
 
 namespace {
@@ -45,7 +45,7 @@ void bar(App& app, const char* label, const std::string& number, std::uint64_t v
     float tagRight = p.x + ImGui::CalcTextSize(label).x;
     if (active) {
         FontScope f(app, 11.5f);
-        const char* tag = "in use";
+        const char* tag = "on";
         const ImVec2 ts = ImGui::CalcTextSize(tag);
         const ImVec2 lo{tagRight + 6.0f * ui, p.y + (lineH - ts.y) * 0.5f - 1.0f * ui};
         dl->AddRectFilled(lo, {lo.x + ts.x + 8.0f * ui, lo.y + ts.y + 2.0f * ui}, accent, 3.0f * ui);
@@ -78,7 +78,7 @@ void bar(App& app, const char* label, const std::string& number, std::uint64_t v
 }  // namespace
 
 void drawWorkMeter(App& app) {
-    cardBegin(app, "How much work?", gloss::meter);
+    cardBegin(app, "Work", gloss::meter);
     const WorkMeter& m = app.meter;
     if (!m.valid) {
         cardText(kTextDim, "Measuring…");
@@ -87,8 +87,8 @@ void drawWorkMeter(App& app) {
     }
     const bool brute = app.mode == vis::Mode::Brute;
     const std::uint64_t maxV = std::max<std::uint64_t>(1, std::max(m.baselineTests, m.gridKnown() ? m.gridTests : 0));
-    bar(app, "Check every wall", fmtInt(m.baselineTests), m.baselineTests, maxV, kAmber, brute, true);
-    bar(app, "Use the grid", m.gridKnown() ? fmtInt(m.gridTests) : "not measured", m.gridTests, maxV, kCyan, !brute, m.gridKnown());
+    bar(app, "All walls", fmtInt(m.baselineTests), m.baselineTests, maxV, kAmber, brute, true);
+    bar(app, "Grid", m.gridKnown() ? fmtInt(m.gridTests) : "not measured", m.gridTests, maxV, kCyan, !brute, m.gridKnown());
     cardTextSmall(app, kTextDim, "%s rays × %s walls = %s checks", fmtInt(m.rays).c_str(), fmtInt(m.walls).c_str(),
                   fmtInt(m.baselineTests).c_str());
     tooltip(gloss::wallTest);
@@ -97,7 +97,7 @@ void drawWorkMeter(App& app) {
     // Time for the active method: the median of real timed queries (nothing from the untimed passes).
     const ModeStats& cur = app.stats[static_cast<int>(app.mode)];
     const double us = cur.total.n > 0 ? cur.total.median() : app.result.stats.totalUs;
-    ImGui::TextUnformatted("Time to work out the lit area:");
+    ImGui::TextUnformatted("Time:");
     ImVec2 lo = ImGui::GetItemRectMin(), hi = ImGui::GetItemRectMax();
     ImGui::SameLine(0.0f, 5.0f * app.uiScale);
     {
