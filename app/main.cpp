@@ -129,12 +129,19 @@ int main(int argc, char** argv) {
     if (!glfwInit()) return 1;
     glfwWindowHint(GLFW_SAMPLES, 4);
     glfwWindowHint(GLFW_VISIBLE, headless ? GLFW_FALSE : GLFW_TRUE);
+    // On a scaled display (150%, 200%) the window is as big, in device pixels, as the interface is: the
+    // requested size counts at 100%. Headless runs stay at 100% so captures are the same everywhere.
+    glfwWindowHint(GLFW_SCALE_TO_MONITOR, headless ? GLFW_FALSE : GLFW_TRUE);
     GLFWwindow* window = glfwCreateWindow(opt.width, opt.height, "2D Visibility & Lighting Engine", nullptr, nullptr);
     if (!window) {
         glfwTerminate();
         return 1;
     }
-    glfwSetWindowSizeLimits(window, 900, 600, GLFW_DONT_CARE, GLFW_DONT_CARE);
+    float sx = 1.0f, sy = 1.0f;
+    if (!headless) glfwGetWindowContentScale(window, &sx, &sy);
+    sx = std::max(sx, 1.0f);
+    sy = std::max(sy, 1.0f);
+    glfwSetWindowSizeLimits(window, static_cast<int>(900.0f * sx), static_cast<int>(600.0f * sy), GLFW_DONT_CARE, GLFW_DONT_CARE);
     GLFWcursor* cursors[5] = {glfwCreateStandardCursor(GLFW_ARROW_CURSOR), glfwCreateStandardCursor(GLFW_POINTING_HAND_CURSOR),
                               glfwCreateStandardCursor(GLFW_RESIZE_ALL_CURSOR), glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR),
                               glfwCreateStandardCursor(GLFW_IBEAM_CURSOR)};
@@ -147,10 +154,8 @@ int main(int argc, char** argv) {
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr;  // no imgui.ini in the working directory
     if (!headless) io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;  // the loop below picks the cursor
-    float sx = 1.0f, sy = 1.0f;
-    glfwGetWindowContentScale(window, &sx, &sy);
     App app;
-    setupUi(app, headless ? 1.0f : std::max(sx, 1.0f));
+    setupUi(app, sx);
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 130");
 
