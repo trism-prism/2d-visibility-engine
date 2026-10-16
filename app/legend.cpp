@@ -13,7 +13,14 @@ float rowHeight(const App& app, const LegendRow& r, float wrap, bool caption) {
     const float px = kPx * app.uiScale;
     const float w = wrap - (r.sw == Swatch::None ? 0.0f : kSwatchW * app.uiScale);
     float h = std::max(app.uiFont->CalcTextSizeA(px, FLT_MAX, w, r.text.c_str()).y, px);
-    if (caption) h = std::max(h, px * 1.2f);  // captions are one short line; the height only changes if one wraps
+    if (caption) {
+        // Reserve the height of the longest captions the overlays can produce, so the strip (and with it the
+        // scale of the world) never changes while the probe ray changes. Normally that is one line.
+        for (const char* worst : {"Crosses 999 squares, tests 99,999 of 99,999 walls.", "99,999 rays: one per wall end or crossing.",
+                                  "99 x 99 squares. Brighter = more rays crossed it.", "No grid in All walls. Lines are rays."})
+            h = std::max(h, app.uiFont->CalcTextSizeA(px, FLT_MAX, w, worst).y);
+        h = std::max(h, px);
+    }
     return h;
 }
 
