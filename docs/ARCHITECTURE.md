@@ -211,3 +211,43 @@ Checked against the current DESIGN.md. Nothing in the code contradicts it; these
 - `Scene::sanitizeWall` snaps clipped coordinates exactly onto the boundary and canonicalises `-0.0`; DESIGN says only "Liang-Barsky".
 - Brute-mode `Trace` stores no per-ray wall lists (`Trace::allWallsTested` is set instead, section 2); DESIGN's description of the trace ("walls tested") does not distinguish the modes.
 - A non-finite light gives an empty polygon (`computeVisibility`); DESIGN only says the light is clamped.
+
+## 11. Supported geometry and limits
+
+In the demo application the world is the rectangle `[0, W] x [0, H]` with 1600 x 1000 world units, and its four edges are permanent walls. A wall is a closed, opaque, zero-thickness line segment given by `double` coordinates. Walls may cross, touch, share end points, form T-junctions and overlap collinearly. Wall input is clipped to the world; non-finite coordinates, coordinates of magnitude above 1e150, walls entirely outside, and walls shorter than 1e-6 after clipping are rejected. A wall seen exactly end-on blocks nothing; a light on a wall shines to both sides; the light is clamped into the world. The full contract and its reasoning are in [DESIGN.md](DESIGN.md), section 2; the places where the code is stricter or adds detail are listed in section 10 above.
+
+## 12. Repository layout
+
+```
+CMakeLists.txt, CMakePresets.json   build options and the release / debug / asan presets
+scripts/dev.ps1                     runs a command inside the MSVC developer environment
+core/                               static library viscore (standard library only)
+  geometry.*  exact orient, rayHit, segment tests, clipping
+  grid.*      uniform grid (CSR cell lists) and the DDA walker
+  scene.*     walls, grid, crossings, targets, edit operations
+  visibility.* computeVisibility, Trace, statistics
+  scenes.*    deterministic demo and stress scene generators, light placement
+app/                                vis_app: GLFW + Dear ImGui front end
+  main.cpp    window, command-line flags, frame loop, cursors, capture
+  app.*       application state, input, queries, work-meter counters, script fields
+  ui.cpp      panel (Simple / Engine), status line, fonts and theme
+  widgets.*   panel building blocks and the plain-language glossary
+  meter.cpp   work meter; details.cpp  Engine panels
+  tour.cpp    guided tour; legend.*  legend and the strip under the room
+  render.cpp  canvas drawing and overlays; script.*  script runner
+bench/                              vis_bench and committed results (bench/results/)
+tests/                              doctest suite (vis_tests) and app scripts (tests/scripts/)
+docs/                               DESIGN, ARCHITECTURE, WALKTHROUGH, DECISIONS, BENCHMARK, APP, RUNNING, images/
+```
+
+## 13. Limitations and possible extensions
+
+These are documented possibilities, not commitments.
+
+- One light only; no light colour, radius or attenuation model. The gradient in the application is cosmetic.
+- Hard shadows only: walls have zero thickness and the light is a point.
+- Every edit rebuilds the grid, crossings and targets from scratch (cost per edit in [BENCHMARK.md](BENCHMARK.md)); incremental updates are not implemented.
+- A ray is cast for every target whether or not it is visible, so scenes with very many crossings are expensive in both modes ([BENCHMARK.md](BENCHMARK.md), "Where the grid loses").
+- Possible alternatives, discussed in [DECISIONS.md](DECISIONS.md): an angular sweep with an ordered active set, a quadtree or BVH instead of the uniform grid, multiple lights, a WebAssembly build. None is implemented or tested.
+- Single-threaded; no GPU computation.
+- Only Windows with MSVC was built and run.
