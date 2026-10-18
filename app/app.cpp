@@ -25,7 +25,7 @@ namespace {
 const SceneInfo kSceneInfos[] = {
     {vis::SceneKind::Demo, "Demo", "Just try it out.", "R"},
     {vis::SceneKind::Scatter, "Scatter", "Where the grid shines.", "1"},
-    {vis::SceneKind::Maze, "Maze", "A more realistic layout.", "2"},
+    {vis::SceneKind::Maze, "Maze", "Closest to a real level.", "2"},
     {vis::SceneKind::LongWalls, "Long walls", "Both methods struggle.", "3"},
     {vis::SceneKind::Cluster, "Cluster", "Where the grid helps least.", "4"},
 };

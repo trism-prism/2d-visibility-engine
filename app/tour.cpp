@@ -21,7 +21,7 @@ struct TourStep {
 
 const TourStep kSteps[kTourSteps] = {
     {"Move the light",
-     "Drag the light around.",
+     "Drag the light; it's recomputed on every move.",
      vis::SceneKind::Demo, false, vis::Mode::Grid, Overlay::Off},
     {"Draw walls",
      "Drag on the floor to draw, right-click a wall to erase.",
