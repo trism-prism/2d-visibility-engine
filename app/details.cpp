@@ -60,7 +60,7 @@ void compareTable(App& app) {
     ImGui::SameLine();
     ImGui::TextColored(app.identical ? ImVec4(0.45f, 0.9f, 0.55f, 1) : ImVec4(1, 0.4f, 0.4f, 1), app.identical ? "yes" : "NO");
     cardTextSmall(app, kTextDim,
-                  "Both run every update. Timed separately; overlay and meter passes excluded.");
+                  "Both run on every update, timed separately. Overlay and meter passes don't count.");
 }
 
 }  // namespace
@@ -115,7 +115,7 @@ void drawEngineDetails(App& app) {
         kvRow(app, "Crossings + targets", fmtDuration(rb.intersectUs).c_str());
         ImGui::EndTable();
     }
-    cardTextSmall(app, kTextDim, "Paid per edit, not per frame.");
+    cardTextSmall(app, kTextDim, "Paid once per edit, not every frame.");
     cardEnd(app);
 
     cardBegin(app, "Compare", gloss::compare);

@@ -398,19 +398,19 @@ wait 3
 # --- plain-language captions come from real data
 set overlay grid
 wait 3
-expect caption has Brighter = more rays
+expect caption has Brighter squares saw more rays
 set overlay probe
 wmove 800 300
 wait 3
-expect caption has Crosses
+expect caption has Passes
 expect caption has of 59 walls
 set mode brute
 wait 3
-expect caption has Tests all 59 walls
+expect caption has Checks all 59 walls
 set mode grid
 set overlay rays
 wait 3
-expect caption has rays: one per wall end
+expect caption has rays, one per wall end
 set overlay off
 wait 2
 

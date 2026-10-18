@@ -23,11 +23,11 @@ const char* overlayName(Overlay o) {
 
 namespace {
 const SceneInfo kSceneInfos[] = {
-    {vis::SceneKind::Demo, "Demo", "Hand-built. Good for drawing.", "R"},
-    {vis::SceneKind::Scatter, "Scatter", "Many short walls. Grid's best case.", "1"},
-    {vis::SceneKind::Maze, "Maze", "Rooms, corridors, a few diagonals.", "2"},
-    {vis::SceneKind::LongWalls, "Long walls", "Long, crossing walls. Hard for both.", "3"},
-    {vis::SceneKind::Cluster, "Cluster", "All in one corner. Grid helps least.", "4"},
+    {vis::SceneKind::Demo, "Demo", "A small room. Draw in it.", "R"},
+    {vis::SceneKind::Scatter, "Scatter", "Lots of little walls. Grid loves this.", "1"},
+    {vis::SceneKind::Maze, "Maze", "Rooms and halls with a few diagonals.", "2"},
+    {vis::SceneKind::LongWalls, "Long walls", "Long walls everywhere. Tough on both.", "3"},
+    {vis::SceneKind::Cluster, "Cluster", "Crammed in one corner. Grid helps least.", "4"},
 };
 std::string wallsPhrase(std::size_t n) { return ui::fmtInt(n) + (n == 1 ? " wall" : " walls"); }
 }  // namespace
@@ -463,23 +463,23 @@ std::string App::slowNote() const {
 
 std::string App::overlayCaption() const {
     switch (overlay) {
-        case Overlay::Off: return "Lit area only.";
+        case Overlay::Off: return "Just the lit area.";
         case Overlay::Grid:
             if (mode == vis::Mode::Brute)
-                return "No grid in All walls. Lines are rays.";
+                return "All walls has no grid. Lines are rays.";
             return std::to_string(scene.grid().cols()) + " x " + std::to_string(scene.grid().rows()) +
-                   " squares. Brighter = more rays crossed it.";
+                   " squares. Brighter squares saw more rays.";
         case Overlay::Probe: {
             const vis::Trace::RayRecord* r = probe();
-            if (!r) return "Hover the room to pick a ray.";
+            if (!r) return "Hover over the room to pick a ray.";
             const std::size_t tested = probeWalls(*r);
-            if (mode == vis::Mode::Brute) return "Tests all " + ui::fmtInt(scene.wallCount()) + " walls.";
+            if (mode == vis::Mode::Brute) return "Checks all " + ui::fmtInt(scene.wallCount()) + " walls.";
             const std::size_t cells = r->cellEnd - r->cellBegin;
-            return "Crosses " + ui::fmtInt(cells) + (cells == 1 ? " square" : " squares") + ", tests " + ui::fmtInt(tested) +
+            return "Passes " + ui::fmtInt(cells) + (cells == 1 ? " square" : " squares") + ", checks " + ui::fmtInt(tested) +
                    " of " + ui::fmtInt(scene.wallCount()) + " walls.";
         }
         case Overlay::Rays:
-            return ui::fmtInt(trace.rays.size()) + " rays: one per wall end or crossing.";
+            return ui::fmtInt(trace.rays.size()) + " rays, one per wall end or crossing.";
     }
     return {};
 }

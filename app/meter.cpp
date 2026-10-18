@@ -13,20 +13,20 @@ using namespace ui;
 std::string App::meterVerdict() const {
     if (!meter.valid || meter.baselineTests == 0) return {};
     if (!meter.gridKnown())
-        return "Measuring when you stop.";
+        return "Measuring once you stop.";
     const double ratio = static_cast<double>(meter.gridTests) / static_cast<double>(meter.baselineTests);
     const long pct = std::lround(ratio * 100.0);
     if (ratio >= 0.9) {
-        std::string s = "Grid saves little";
+        std::string s = "Grid helps little";
         const std::size_t user = scene.userWallCount();
         const double perWall = static_cast<double>(scene.grid().registrations()) / static_cast<double>(std::max<std::size_t>(1, scene.wallCount()));
-        if (user >= 20 && maxCellWalls * 5 >= user) s += ": walls packed in few squares.";
-        else if (perWall >= 6.0) s += ": long walls fill many squares.";
+        if (user >= 20 && maxCellWalls * 5 >= user) s += ": walls bunched in a few squares.";
+        else if (perWall >= 6.0) s += ": long walls cover lots of squares.";
         else s += ".";
         return s;
     }
-    if (ratio > 0.0 && pct < 1) return "Grid: under 1% of the work.";
-    return "Grid: " + std::to_string(pct) + "% of the work.";
+    if (ratio > 0.0 && pct < 1) return "Grid does under 1% of the work.";
+    return "Grid does " + std::to_string(pct) + "% of the work.";
 }
 
 namespace {
