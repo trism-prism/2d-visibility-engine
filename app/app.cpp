@@ -23,11 +23,11 @@ const char* overlayName(Overlay o) {
 
 namespace {
 const SceneInfo kSceneInfos[] = {
-    {vis::SceneKind::Demo, "Demo", "A small room. Draw in it.", "R"},
-    {vis::SceneKind::Scatter, "Scatter", "Lots of little walls. Grid loves this.", "1"},
-    {vis::SceneKind::Maze, "Maze", "Rooms and halls with a few diagonals.", "2"},
-    {vis::SceneKind::LongWalls, "Long walls", "Long walls everywhere. Tough on both.", "3"},
-    {vis::SceneKind::Cluster, "Cluster", "Crammed in one corner. Grid helps least.", "4"},
+    {vis::SceneKind::Demo, "Demo", "Just try it out.", "R"},
+    {vis::SceneKind::Scatter, "Scatter", "Where the grid shines.", "1"},
+    {vis::SceneKind::Maze, "Maze", "A more realistic layout.", "2"},
+    {vis::SceneKind::LongWalls, "Long walls", "Both methods struggle.", "3"},
+    {vis::SceneKind::Cluster, "Cluster", "Where the grid helps least.", "4"},
 };
 std::string wallsPhrase(std::size_t n) { return ui::fmtInt(n) + (n == 1 ? " wall" : " walls"); }
 }  // namespace
@@ -463,12 +463,12 @@ std::string App::slowNote() const {
 
 std::string App::overlayCaption() const {
     switch (overlay) {
-        case Overlay::Off: return "Just the lit area.";
+        case Overlay::Off: return "Just the result.";
         case Overlay::Grid:
             if (mode == vis::Mode::Brute)
-                return "All walls has no grid. Lines are rays.";
+                return "No grid here; lines are rays.";
             return std::to_string(scene.grid().cols()) + " x " + std::to_string(scene.grid().rows()) +
-                   " squares. Brighter squares saw more rays.";
+                   " squares; brighter ones see more rays.";
         case Overlay::Probe: {
             const vis::Trace::RayRecord* r = probe();
             if (!r) return "Hover over the room to pick a ray.";

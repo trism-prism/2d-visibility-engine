@@ -30,19 +30,19 @@ Top to bottom:
 
 | Section | What it holds |
 |---|---|
-| "Light and walls" | "Bright is lit, dark is shadow. Updates live.", the hint "Drag the light. Drag the floor to draw. Right-click to erase.", and a "Tour" button |
-| Method cards | **All walls** ("Baseline: checks every wall.") is the Baseline back end: every ray is tested against every wall. It's called Baseline in the first version of the interface, the benchmark and these documents, and `Brute` in the code and `--mode brute`. **Grid** ("Checks only nearby walls.") is the Grid back end: a ray only tests the walls in the grid squares it crosses. Under the cards: "Same picture. Less work." Both give exactly the same picture. The card in use is highlighted |
+| "Light and walls" | "Move the light, draw walls, compare methods.", the hint "Drag the floor to draw, right-click to erase.", and a "Tour" button |
+| Method cards | **All walls** ("Baseline: checks every wall.") is the Baseline back end: every ray is tested against every wall. It's called Baseline in the first version of the interface, the benchmark and these documents, and `Brute` in the code and `--mode brute`. **Grid** ("Checks only nearby walls.") is the Grid back end: a ray only tests the walls in the grid squares it crosses. Under the cards: "Same picture, different amount of work." Both give exactly the same picture. The card in use is highlighted |
 | Show | **Light only** (overlay `off`), **Squares** (`grid`, formerly "Grid cells": squares tinted by how many rays crossed them), **One ray** (`probe`, formerly "Probe ray": the ray nearest the cursor, the squares it crossed and the walls it tested), **All rays** (`rays`). A caption under the choice describes what's on screen in one live sentence (see below). "Outline" (formerly "Outline visibility polygon") draws the edge of the lit region, the visibility polygon. In Engine the probe's numbers are listed here: squares crossed, walls tested "X of N", `tMinus`, `tPlus` |
 | Work | The work meter, [below](#the-work-meter) |
-| Scene cards | **Demo** (key `R`), **Scatter** (`1`), **Maze** (`2`), **Long walls** (`3`), **Cluster** (`4`), each with a one-line description (for example "Lots of little walls. Grid loves this."). The **Walls** slider picks 100, 250, 500, 1,000, 2,000, 3,000 or 5,000 walls for the generated scenes. Releasing it rebuilds the current generated scene (it does nothing to the demo room). Then **Clear** (`C`) and **Reset** (`R`). A short orange note appears under the cards when "All walls" would take about 30 ms or more per update in the current scene, for example "All walls is slow here: ~246 ms per update." |
+| Scene cards | **Demo** (key `R`), **Scatter** (`1`), **Maze** (`2`), **Long walls** (`3`), **Cluster** (`4`), each with a one-line description (for example "Where the grid shines."). The **Walls** slider picks 100, 250, 500, 1,000, 2,000, 3,000 or 5,000 walls for the generated scenes. Releasing it rebuilds the current generated scene (it does nothing to the demo room). Then **Clear** (`C`) and **Reset** (`R`). A short orange note appears under the cards when "All walls" would take about 30 ms or more per update in the current scene, for example "All walls is slow here: ~246 ms per update." |
 | Engine only | Numbers, Edit cost, Compare, Grid size and a key list, plus a Seed field under the scene cards ([below](#what-engine-adds)) |
 
 Live captions under Show:
 
 | Overlay | Example captions |
 |---|---|
-| Light only | "Just the lit area." |
-| Squares | "40 x 25 squares. Brighter squares saw more rays." (in All walls: "All walls has no grid. Lines are rays.") |
+| Light only | "Just the result." |
+| Squares | "40 x 25 squares; brighter ones see more rays." (in All walls: "No grid here; lines are rays.") |
 | One ray | "Hover over the room to pick a ray." / "Passes 2 squares, checks 12 of 59 walls." / "Checks all 59 walls." |
 | All rays | "78 rays, one per wall end or crossing." |
 

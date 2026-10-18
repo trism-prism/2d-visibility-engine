@@ -57,7 +57,7 @@ Two levels, switched at the top of the panel: **Simple** (plain words) and **Eng
 | Scatter | Maze | Long walls | Cluster |
 |---|---|---|---|
 | ![Scatter](docs/images/stress_scatter_grid.png) | ![Maze](docs/images/stress_maze_grid.png) | ![Long walls](docs/images/stress_long_grid.png) | ![Cluster](docs/images/stress_cluster_grid.png) |
-| Grid loves it | Rooms and halls | Tough on both | Grid helps least |
+| Where the grid shines | A more realistic layout | Both methods struggle | Where the grid helps least |
 
 All screenshots are real captures at 1,000 walls (`tests/scripts/captures.script`).
 

@@ -398,7 +398,7 @@ wait 3
 # --- plain-language captions come from real data
 set overlay grid
 wait 3
-expect caption has Brighter squares saw more rays
+expect caption has brighter ones see more rays
 set overlay probe
 wmove 800 300
 wait 3
