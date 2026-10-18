@@ -334,8 +334,8 @@ void drawCanvas(ImDrawList* dl, const App& app) {
             // The two sides of the ray end at different walls. The nearer end is where one side stops;
             // the farther end is where the other side's view continues to. Each label sits on its own side.
             const bool minusNear = r.tMinus < r.tPlus;
-            marker(r.tMinus, ui::kGreen, minusNear ? "stops here" : "other side reaches here", -1.0f);
-            marker(r.tPlus, ui::kPink, minusNear ? "other side reaches here" : "stops here", 1.0f);
+            marker(r.tMinus, ui::kGreen, minusNear ? "stops here" : "other side goes to here", -1.0f);
+            marker(r.tPlus, ui::kPink, minusNear ? "other side goes to here" : "stops here", 1.0f);
         }
     }
 

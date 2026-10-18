@@ -21,22 +21,22 @@ struct TourStep {
 
 const TourStep kSteps[kTourSteps] = {
     {"Move the light",
-     "Drag the light. The bright area is what it sees.",
+     "Drag the light; it's recomputed on every move.",
      vis::SceneKind::Demo, false, vis::Mode::Grid, Overlay::Off},
     {"Draw walls",
-     "Drag on the floor to draw. Right-click a wall to erase.",
+     "Drag on the floor to draw, right-click a wall to erase.",
      vis::SceneKind::Demo, false, vis::Mode::Grid, Overlay::Off},
     {"One ray",
-     "Hover to pick a ray. Orange walls are the only ones it tested.",
+     "Hover to pick a ray; orange walls are the only ones it checked.",
      vis::SceneKind::Demo, false, vis::Mode::Grid, Overlay::Probe},
     {"All walls",
-     "Same ray, now testing every wall. Same picture, more work.",
+     "Now it checks every wall: same picture, more work.",
      vis::SceneKind::Demo, false, vis::Mode::Brute, Overlay::Probe},
     {"More walls",
-     "1,000 walls. The meter shows the grid doing a fraction of the work.",
+     "With 1,000 walls the grid does a fraction of the work.",
      vis::SceneKind::Scatter, true, vis::Mode::Grid, Overlay::Off},
     {"Worst case",
-     "Walls packed in one corner. The grid helps less. Explore.",
+     "Everything is bunched in one corner, so the grid helps less.",
      vis::SceneKind::Cluster, true, vis::Mode::Grid, Overlay::Off},
 };
 
@@ -137,7 +137,7 @@ void App::drawTourCard() {
     ImGui::SameLine();
     ImGui::SetCursorPosX(left + inner - 70.0f * ui);
     if (button(*this, "Close", {70.0f * ui, 0})) tourClose();
-    tooltip("Esc closes. “Tour” in the panel reopens.");
+    tooltip("Esc closes; Tour reopens.");
 
     tourCardMin = ImGui::GetWindowPos();
     const ImVec2 sz = ImGui::GetWindowSize();

@@ -6,17 +6,27 @@ Related: [APP.md](APP.md) (the demo application in detail), [BENCHMARK.md](BENCH
 
 ## Verified platform and prerequisites
 
-Everything below was built and run on one machine: Windows 11 Pro (build 26200), Intel Core i7-1355U, Intel Iris Xe Graphics (driver 32.0.101.7088), Visual Studio Build Tools 2022 with MSVC 19.44 (`_MSC_FULL_VER` 194435230), the CMake 3.31.6 and Ninja bundled with the Build Tools, Git 2.55. **Other operating systems, compilers and GPUs are untested.** The project files contain non-MSVC branches (`-Wall`, `-ffp-contract=off`), but they have not been built. Only Windows with MSVC was built and run.
+Everything here was built and run on one machine:
+
+- Windows 11 Pro (build 26200)
+- Intel Core i7-1355U, Intel Iris Xe Graphics (driver 32.0.101.7088)
+- Visual Studio Build Tools 2022 with MSVC 19.44 (`_MSC_FULL_VER` 194435230)
+- CMake 3.31.6 and Ninja, both bundled with the Build Tools
+- Git 2.55
+
+**Other operating systems, compilers and GPUs are untested.** The project files have non-MSVC branches (`-Wall`, `-ffp-contract=off`), but nobody has built them. Only Windows with MSVC was built and run.
 
 You need:
 
-- Windows 11 and Visual Studio Build Tools 2022 with the "Desktop development with C++" workload (this includes the bundled CMake and Ninja; nothing is installed system-wide by this project). `scripts/dev.ps1` expects them at `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools`; set the environment variable `VIS_VS_PATH` to use another location. The `asan` preset also needs the AddressSanitizer component of the Build Tools.
-- Git, and internet access for the first configure: it fetches GLFW 3.4, Dear ImGui v1.92.9 (when building the app) and doctest v2.4.12 (when building the tests) with CMake `FetchContent`.
-- A GPU and driver with OpenGL 3.0 or newer. The application sets no context-version hint (GLFW default context) and initialises the Dear ImGui OpenGL3 backend with GLSL `#version 130` (`app/main.cpp`), which is what sets the minimum. Only the Intel Iris Xe listed above was exercised; its OpenGL version string was not recorded.
+- **Windows 11 and Visual Studio Build Tools 2022** with the "Desktop development with C++" workload. That includes the bundled CMake and Ninja, and this project installs nothing system-wide.
+  - `scripts/dev.ps1` expects the Build Tools at `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools`. Set the environment variable `VIS_VS_PATH` to use another location.
+  - The `asan` preset also needs the AddressSanitizer component of the Build Tools.
+- **Git, and internet for the first configure.** CMake `FetchContent` downloads GLFW 3.4, Dear ImGui v1.92.9 (when building the app) and doctest v2.4.12 (when building the tests).
+- **A GPU and driver with OpenGL 3.0 or newer.** The application sets no context-version hint (GLFW default context) and starts the Dear ImGui OpenGL3 backend with GLSL `#version 130` (`app/main.cpp`). That sets the minimum. Only the Intel Iris Xe above was tried, and its OpenGL version string wasn't recorded.
 
 ## Build, test, run, benchmark
 
-All commands are run in PowerShell from the repository root. `scripts/dev.ps1` imports the MSVC x64 developer environment for one command, puts the bundled CMake and Ninja on `PATH`, and restores your environment afterwards.
+Run all commands in PowerShell from the repository root. `scripts/dev.ps1` loads the MSVC x64 developer environment for one command, puts the bundled CMake and Ninja on `PATH`, and restores your environment afterwards.
 
 ```powershell
 # configure and build (release); first run downloads the dependencies
@@ -38,7 +48,12 @@ All commands are run in PowerShell from the repository root. `scripts/dev.ps1` i
 
 ### Other presets
 
-`CMakePresets.json` also has `debug` (Debug) and `asan` (RelWithDebInfo with MSVC `/fsanitize=address`; core, tests and benchmark only). They are used the same way, e.g. `.\scripts\dev.ps1 ctest --preset debug`. The debug and asan presets divide the random-trial counts of the tests by 5 and 8 (`VIS_TEST_SCALE`).
+`CMakePresets.json` also has two more presets:
+
+- `debug` (Debug)
+- `asan` (RelWithDebInfo with MSVC `/fsanitize=address`; core, tests and benchmark only)
+
+Use them the same way, e.g. `.\scripts\dev.ps1 ctest --preset debug`. The debug and asan presets divide the tests' random-trial counts by 5 and 8 (`VIS_TEST_SCALE`).
 
 ### Building without the application
 
@@ -62,16 +77,23 @@ vis_app [--size WxH] [--scene demo|scatter|maze|long|cluster] [--walls N] [--see
 |---|---|
 | `--mode brute` / `--mode grid` | `brute` selects "All walls" (Baseline), `grid` selects "Grid" |
 | `--walls N` | Clamped to 100-5000 |
-| `--size WxH` | Clamped to 400-7680 by 300-4320; the window cannot be resized below 900 x 600. Both are scaled by the display's DPI scale in interactive runs; headless runs stay at 100% |
+| `--size WxH` | Clamped to 400-7680 by 300-4320. The window can't be resized below 900 x 600. Both are scaled by the display's DPI scale in interactive runs; headless runs stay at 100% |
 | `--tour` | Opens the guided tour (it starts by itself only in a plain interactive launch, see [APP.md](APP.md)) |
 | `--capture file.bmp [--frames N]` | Renders N frames (default 3), writes a 24-bit BMP (parent directories are created) and exits |
 | `--script file` | Replays a script and exits when it ends. A missing file exits with code 2 and prints "cannot read script" |
 
-Capture and script runs use a hidden window and no vsync, so the window size is limited by the screen (a `--size 2560x1440` capture produced 1924x1050 on the verified machine).
+Capture and script runs use a hidden window and no vsync, so the screen limits the window size. A `--size 2560x1440` capture produced 1924x1050 on the verified machine.
 
 ## Scripts
 
-A script is a text file, one command per line; `#` starts a comment. Events go through ImGui's input queue, so the real canvas input handling runs. Real OS mouse and keyboard delivery through GLFW is not exercised, and neither is the cursor shape the OS displays (the cursor is checked as application state, `cursor`). Hands-on use with a physical mouse has not been done. Commands are documented in `app/script.h`.
+A script is a text file with one command per line. `#` starts a comment. Commands are documented in `app/script.h`.
+
+Events go through ImGui's input queue, so the real canvas input handling runs. Two things are not exercised:
+
+- Real OS mouse and keyboard delivery through GLFW.
+- The cursor shape the OS displays. The cursor is checked as application state (`cursor`).
+
+Nobody has done hands-on testing with a physical mouse.
 
 ### Commands
 
@@ -98,7 +120,7 @@ The `FIELD` names, all handled in `App::field` (`app/app.cpp`):
 
 | File | Purpose |
 |---|---|
-| `main.script` | The CTest `app_script`: the canvas interaction checks, including the exact boundary tie (a user wall drawn with Shift from corner to corner, picked before the boundary wall), then checks of the interface: Simple fits without scrolling, the work meter figures in both methods, the slow-scene note, captions, cursors, the tour |
+| `main.script` | The CTest `app_script`. First the canvas interaction checks, including the exact boundary tie (a user wall drawn with Shift from corner to corner, picked before the boundary wall). Then the interface checks: Simple fits without scrolling, the work meter figures in both methods, the slow-scene note, captions, cursors, the tour |
 | `expect_script_load_failure.cmake` | The CTest `app_script_missing`: a missing script file must exit with code 2 and print "cannot read script" |
 | `captures.script` | Writes the review captures (the README screenshots) to `build/captures` |
 | `captures_small.script` | The 900 x 600 capture; run with `--size 900x600` |
