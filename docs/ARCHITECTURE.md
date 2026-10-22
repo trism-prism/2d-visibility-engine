@@ -1,6 +1,6 @@
 # Architecture
 
-This is how the code works today. The contract it's built against is [DESIGN.md](DESIGN.md). Where the two differ, the differences are in the last numbered section. Measurements are in [BENCHMARK.md](BENCHMARK.md), and the reasoning behind choices is in [DECISIONS.md](DECISIONS.md).
+This is how the code works today. The contract I built it against is [DESIGN.md](DESIGN.md). Where the two differ, the differences are in section 10. Measurements are in [BENCHMARK.md](BENCHMARK.md), and my reasoning for each choice is in [DECISIONS.md](DECISIONS.md).
 
 A few terms first:
 
@@ -239,7 +239,7 @@ There's no logarithmic query bound, and none is claimed. The grid helps when ray
 
 No tolerance is used in the sort comparator, or to decide which side of a ray a point is on.
 
-**Sort fast path.** The angular sort caches each target's difference from the light. It applies the same floating-point filter as `orient` to that difference before falling back to `orient`, so the result is bitwise identical to the plain comparator. In a throwaway harness this made the sort about 30% faster and the whole query about 20-30% faster on Scatter and Maze at n=1000. The committed benchmark results and the figures quoted in this document were produced before this change and were not regenerated.
+**Sort fast path.** The angular sort caches each target's difference from the light. It applies the same floating-point filter as `orient` to that difference before falling back to `orient`, so the result is bitwise identical to the plain comparator. In a throwaway harness this made the sort about 30% faster and the whole query about 20-30% faster on Scatter and Maze at n=1000. The committed benchmark results and the figures quoted in this document predate this change, and I didn't regenerate them.
 
 ## 6. Worked example
 
@@ -345,7 +345,7 @@ In Baseline mode `trace.cells` is empty, `cellVisits` has size 0 and `allWallsTe
 
 ## 10. Where the code differs from, or adds to, DESIGN.md
 
-Checked against the current DESIGN.md. Nothing in the code contradicts it. These are details the contract doesn't state:
+I checked this against the current DESIGN.md. Nothing in the code contradicts it, but the contract doesn't state these details:
 
 - `intersectSegments` validates the crossing parameters along both segments and falls back to an interpolated in-segment point for nearly parallel crossings (section 3.6). DESIGN requires every pairwise intersection point to be a target and doesn't describe the computation.
 - Emission also drops a last vertex equal to the first. DESIGN says "consecutive duplicates are dropped".
@@ -356,7 +356,7 @@ Checked against the current DESIGN.md. Nothing in the code contradicts it. These
 
 ## 11. Supported geometry and limits
 
-In the demo app, the world is the rectangle `[0, W] x [0, H]`, 1600 x 1000 world units. Its four edges are permanent walls.
+In the demo app the world is the rectangle `[0, W] x [0, H]`, 1600 x 1000 world units. Its four edges are permanent walls.
 
 What a wall is:
 
@@ -402,12 +402,12 @@ docs/                               DESIGN, ARCHITECTURE, WALKTHROUGH, DECISIONS
 
 ## 13. Limitations and possible extensions
 
-These are possibilities, not commitments.
+These are possibilities, not promises.
 
 - One light only. No light colour, radius or attenuation model. The gradient in the app is cosmetic.
 - Hard shadows only: walls have zero thickness and the light is a point.
-- Every edit rebuilds the grid, crossings and targets from scratch (cost per edit in [BENCHMARK.md](BENCHMARK.md)). Incremental updates aren't implemented.
+- Every edit rebuilds the grid, crossings and targets from scratch (cost per edit in [BENCHMARK.md](BENCHMARK.md)). I haven't implemented incremental updates.
 - A ray is cast for every target whether or not it's visible, so scenes with very many crossings are expensive in both modes ([BENCHMARK.md](BENCHMARK.md), "Where the grid loses").
-- Alternatives discussed in [DECISIONS.md](DECISIONS.md): an angular sweep with an ordered active set, a quadtree or BVH instead of the uniform grid, multiple lights, a WebAssembly build. None is implemented or tested.
+- Alternatives I discuss in [DECISIONS.md](DECISIONS.md): an angular sweep with an ordered active set, a quadtree or BVH instead of the uniform grid, multiple lights, a WebAssembly build. I haven't implemented or tested any of them.
 - Single-threaded. No GPU computation.
-- Only Windows with MSVC was built and run.
+- I only built and ran Windows with MSVC.

@@ -1,8 +1,8 @@
 # Design
 
-This is the contract the implementation is built against. Where code and this file disagree, one of them is a bug.
+This is the contract I built the implementation against. Where code and this file disagree, one of them is a bug.
 
-The short version: a point light sits in a walled rectangle, and we compute the polygon of everything it can see. Two modes compute the same answer, one slow and simple (test every wall), one faster (a grid that skips far-away walls).
+The short version: a point light sits in a walled rectangle, and I compute the polygon of everything it can see. Two modes give the same answer. One is slow and simple (test every wall) and one is faster (a grid that skips far-away walls).
 
 ## 1. Stack
 
@@ -45,7 +45,7 @@ Rejected:
 
 Output: a star-shaped polygon around the light `L`, vertices in counter-clockwise order, exact up to floating-point rounding. No angular epsilon offsets are used.
 
-**Targets** (scene-level, recomputed only on edit): the de-duplicated set of all wall endpoints and all pairwise wall intersection points. Between two consecutive target directions the nearest wall cannot change, so the visible boundary there is one straight piece of one wall. That is why we only need to cast rays at targets.
+**Targets** (scene-level, recomputed only on edit): the de-duplicated set of all wall endpoints and all pairwise wall intersection points. Between two consecutive target directions the nearest wall cannot change, so the visible boundary there is one straight piece of one wall. So I only need to cast rays at targets.
 
 **Query** (per light position):
 
@@ -62,7 +62,7 @@ Output: a star-shaped polygon around the light `L`, vertices in counter-clockwis
 - Distances `t` are ordinary floating point.
 - Exactness assumes no overflow or underflow in the products. That holds for world-scale coordinates (accepted walls lie inside the world rectangle and the light is clamped to it). It would fail only for points about 1e-150 apart or closer, far below `kLightClearance`.
 
-Why exactness is required, not optional: an earlier revision sorted by `atan2` and classified sides with a rounded cross product. Take a light, a wall end and another target that are collinear in decimal but not in binary. The sort and the side test could disagree, and a polygon vertex got dropped. Repro: world 1x1, wall `(0.6,0.4)-(0.5,0.3)`, light `(0.7,0.3)`; area 0.465 instead of 0.765. With one exact predicate, both decisions are consistent with the scene as actually stored.
+Exactness is required, not optional. An earlier revision of mine sorted by `atan2` and classified sides with a rounded cross product. With a light, a wall end and another target that are collinear in decimal but not in binary, the sort and the side test could disagree, and a polygon vertex got dropped. Repro: world 1x1, wall `(0.6,0.4)-(0.5,0.3)`, light `(0.7,0.3)`; area 0.465 instead of 0.765. With one exact predicate, both decisions are consistent with the scene as actually stored.
 
 **One-sided ray/segment test** (`rayHit` in `core/geometry`), for the ray from `L` through target `P` and segment `A-B`, with `sa = orient(L, P, A)`, `sb = orient(L, P, B)` (signs; positive = left of the ray):
 
@@ -135,9 +135,9 @@ No logarithmic query bound is claimed.
 
 ## 5. Alternatives considered
 
-- **Angular sweep with an ordered active set** (`O((n+k) log n)` per query). It is asymptotically better per query and output-sensitive in spirit. But it requires splitting walls at intersections, and its distance comparator is only valid for non-crossing fragments. That puts the correctness risk in the hardest-to-test code. We would choose it if crossing-heavy scenes (large `k`) had to be interactive.
-- **Quadtree / BVH**: adapts to clustered scenes where a uniform grid degrades. Ray walks need a stack and ordered traversal, so it is more code and harder to draw honestly. We would choose it if the "cluster" stress scene mattered more than simplicity.
-- **Endpoint rays with +/- epsilon offsets**: simplest, but it leaks light through shared corners and misses thin gaps below the offset. Replaced by the exact one-sided test.
+- **Angular sweep with an ordered active set** (`O((n+k) log n)` per query). It is asymptotically better per query and output-sensitive in spirit. But it requires splitting walls at intersections, and its distance comparator is only valid for non-crossing fragments. That puts the correctness risk in the hardest-to-test code. I'd choose it if crossing-heavy scenes (large `k`) had to be interactive.
+- **Quadtree / BVH**: adapts to clustered scenes where a uniform grid degrades. Ray walks need a stack and ordered traversal, so it is more code and harder to draw honestly. I'd choose it if the "cluster" stress scene mattered more than simplicity.
+- **Endpoint rays with +/- epsilon offsets**: simplest, but it leaks light through shared corners and misses thin gaps below the offset. I replaced it with the exact one-sided test.
 
 ## 6. Data flow
 

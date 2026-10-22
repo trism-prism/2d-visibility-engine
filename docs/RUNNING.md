@@ -6,7 +6,7 @@ Related: [APP.md](APP.md) (the demo application in detail), [BENCHMARK.md](BENCH
 
 ## Verified platform and prerequisites
 
-Everything here was built and run on one machine:
+I built and ran everything here on one machine:
 
 - Windows 11 Pro (build 26200)
 - Intel Core i7-1355U, Intel Iris Xe Graphics (driver 32.0.101.7088)
@@ -14,15 +14,15 @@ Everything here was built and run on one machine:
 - CMake 3.31.6 and Ninja, both bundled with the Build Tools
 - Git 2.55
 
-**Other operating systems, compilers and GPUs are untested.** The project files have non-MSVC branches (`-Wall`, `-ffp-contract=off`), but nobody has built them. Only Windows with MSVC was built and run.
+**Other operating systems, compilers and GPUs are untested.** The project files have non-MSVC branches (`-Wall`, `-ffp-contract=off`), but I haven't built them. I only built and ran Windows with MSVC.
 
 You need:
 
-- **Windows 11 and Visual Studio Build Tools 2022** with the "Desktop development with C++" workload. That includes the bundled CMake and Ninja, and this project installs nothing system-wide.
+- **Windows 11 and Visual Studio Build Tools 2022** with the "Desktop development with C++" workload. That includes the bundled CMake and Ninja, and the project installs nothing system-wide.
   - `scripts/dev.ps1` expects the Build Tools at `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools`. Set the environment variable `VIS_VS_PATH` to use another location.
   - The `asan` preset also needs the AddressSanitizer component of the Build Tools.
 - **Git, and internet for the first configure.** CMake `FetchContent` downloads GLFW 3.4, Dear ImGui v1.92.9 (when building the app) and doctest v2.4.12 (when building the tests).
-- **A GPU and driver with OpenGL 3.0 or newer.** The application sets no context-version hint (GLFW default context) and starts the Dear ImGui OpenGL3 backend with GLSL `#version 130` (`app/main.cpp`). That sets the minimum. Only the Intel Iris Xe above was tried, and its OpenGL version string wasn't recorded.
+- **A GPU and driver with OpenGL 3.0 or newer.** The application sets no context-version hint (GLFW default context) and starts the Dear ImGui OpenGL3 backend with GLSL `#version 130` (`app/main.cpp`). That sets the minimum. I only tried the Intel Iris Xe above, and I didn't record its OpenGL version string.
 
 ## Build, test, run, benchmark
 
@@ -93,7 +93,7 @@ Events go through ImGui's input queue, so the real canvas input handling runs. T
 - Real OS mouse and keyboard delivery through GLFW.
 - The cursor shape the OS displays. The cursor is checked as application state (`cursor`).
 
-Nobody has done hands-on testing with a physical mouse.
+I haven't tested with a physical mouse by hand.
 
 ### Commands
 
@@ -128,7 +128,7 @@ The `FIELD` names, all handled in `App::field` (`app/app.cpp`):
 
 ## What was run
 
-From clean `build\release` and `build\no-app` directories (the README was written against this state):
+I ran these from clean `build\release` and `build\no-app` directories:
 
 | Step | Result |
 |---|---|
@@ -141,14 +141,14 @@ From clean `build\release` and `build\no-app` directories (the README was writte
 | `vis_app ... --capture` with most flags | exit 0 |
 | `no-app` configure, build, `ctest` | 2 of 2 (`bench_quick`, `vis_tests`); `_deps` contained only doctest |
 | `debug` and `asan` presets (configure, build, ctest) | passed, 3 of 3 and 2 of 2 |
-| `vis_tests` | 60 cases; 757,017 assertions (release), 419,725 (debug), 393,784 (asan) |
-| Full `vis_bench` run | not repeated for the README; output is in `bench/results/` (22 minutes, `done in 1340.1 s`) |
+| `vis_tests` | 60 cases; 343 assertions (same in release, debug and asan) |
+| Full `vis_bench` run | I didn't repeat it for the README. The output is in `bench/results/` (22 minutes, `done in 1340.1 s`) |
 
-Since then CTest gained a fourth test, `app_script_missing` (label `app`):
+Since then I added a fourth CTest test, `app_script_missing` (label `app`):
 
 | Step | Result |
 |---|---|
 | `ctest --preset release` | 4 of 4 (`app_script` takes about 8-10 s) |
 | `ctest --preset debug` | 4 of 4 in about 133 s in total (`app_script` about 91 s; it took about 7 minutes before) |
 | `ctest -L app` | now runs 2 tests |
-| Assertion counts above | not re-counted after the later changes; those did not touch `vis_tests` |
+| Assertion counts above | not re-counted after the later changes, which didn't touch `vis_tests` |

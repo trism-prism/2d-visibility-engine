@@ -1,6 +1,6 @@
 # Walkthrough
 
-A guided tour of why the algorithm works, written for someone learning the project. The implementation is in [ARCHITECTURE.md](ARCHITECTURE.md). Measurements are in [BENCHMARK.md](BENCHMARK.md). Test names in *italics* are real `TEST_CASE` names in `tests/`.
+A tour of why the algorithm works, written for someone learning the project. The implementation is in [ARCHITECTURE.md](ARCHITECTURE.md). Measurements are in [BENCHMARK.md](BENCHMARK.md). Test names in *italics* are real `TEST_CASE` names in `tests/`.
 
 Notation:
 
@@ -68,7 +68,7 @@ So the polygon has two vertices on this ray: the far hit and `E`.
                \ wall          <- tPlus (counter-clockwise side): hits at E, t = 1
 ```
 
-The simple method casts rays at `theta - e` and `theta + e`. With a fixed `e` it breaks when two features are closer than `e` (a narrow gap is missed), and it leaks light at a corner where two walls share an end point.
+The simple method casts rays at `theta - e` and `theta + e`. With a fixed `e` it misses a narrow gap when two features are closer than `e`, and it leaks light at a corner where two walls share an end point.
 
 `rayHit` instead returns two numbers, the limits `tMinus` and `tPlus`. The rule:
 
@@ -99,9 +99,9 @@ Directly checked pieces: *stats sanity: Grid never tests more walls than Brute*,
 
 ## 5. A failure-prone edge case, in full
 
-In short: a case where two points are on one line in decimal but not in binary broke the first design. The fix was to make every "which side / which order" decision with one exact test.
+In short: a case where points are on one line in decimal but not in binary broke my first design. I fixed it by making every "which side / which order" decision with one exact test.
 
-The first design sorted targets by `atan2` and decided sides with `cross(d, A-L)` in floating point. The scene: world 1 x 1, wall `A = (0.6, 0.4)`, `B = (0.5, 0.3)`, light `L = (0.7, 0.3)`.
+My first design sorted targets by `atan2` and decided sides with `cross(d, A-L)` in floating point. The scene: world 1 x 1, wall `A = (0.6, 0.4)`, `B = (0.5, 0.3)`, light `L = (0.7, 0.3)`.
 
 **What went wrong.**
 
@@ -115,7 +115,7 @@ For that merged ray, the wall end `(0.6,0.4)` lies exactly a hair to the clockwi
 
 The clockwise side of the real ray through `(0.6,0.4)` sees the top-left corner `(0,1)`, but that vertex was never emitted. The polygon lost the triangle `(1,1), (0,1), (0.6,0.4)` (area 0.3). The area came out as 0.465 instead of 0.765.
 
-**The fix.** Make every combinatorial decision with one exact predicate.
+**The fix.** I make every combinatorial decision with one exact predicate.
 
 - `orient(L, (0.6,0.4), (0,1))` returns +1. So `(0.6,0.4)` precedes `(0,1)` and they stay two rays.
 - Each ray's own side tests are exact for its own target, and the order of rays agrees with what the side tests assume.
@@ -132,7 +132,7 @@ Tests:
 
 In short: the grid cuts wall tests, not rays and not the sort. When walls are bunched up or there are tons of crossings, the win shrinks.
 
-Grid cost depends on how many walls share the cells a ray visits, and on how many rays there are. Numbers are from `bench/results/results.csv` (see [BENCHMARK.md](BENCHMARK.md) for the tables and how they were produced):
+Grid cost depends on how many walls share the cells a ray visits, and on how many rays there are. The numbers are from `bench/results/results.csv` (see [BENCHMARK.md](BENCHMARK.md) for the tables and how they were produced):
 
 - **Many walls in few cells.** Cluster n=250: Grid is 1.5x to 1.8x faster than Brute (three seeds), with 186-241 walls in the busiest cell. A ray entering the patch tests most of its walls.
 - **Few walls.** Scatter n=16: 1.11x to 1.13x. The scene has no crossings and 36 targets, and the walk's setup costs about as much as the work it saves.

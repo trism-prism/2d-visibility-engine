@@ -2,9 +2,9 @@
 
 This is about `vis_bench`, the headless benchmark in `bench/main.cpp`, and the results committed in `bench/results/`. Every number here comes from `bench/results/results.csv`, `bench/results/grid_sweep.csv` or `bench/results/results.meta.txt`. The run time also comes from the console log of that run. For the algorithms themselves, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
-> **Note (2026-11-13).** The angular sort in `core/visibility.cpp` got faster after these results were produced. It now caches each target's difference from the light and applies the same floating-point filter as `orient` before falling back to it, so the output is bitwise identical. A throwaway harness (not this benchmark) showed the sort about 30% faster and the total query about 20-30% faster on Scatter and Maze at n=1000.
+> **Note (2026-11-13).** I made the angular sort in `core/visibility.cpp` faster after producing these results. It now caches each target's difference from the light and applies the same floating-point filter as `orient` before falling back to it, so the output is bitwise identical. A throwaway harness (not this benchmark) showed the sort about 30% faster and the total query about 20-30% faster on Scatter and Maze at n=1000.
 >
-> `bench/results/*` and every number in this document were **not** regenerated. They predate that change, so the sort times and the sort share of the Grid time below are higher than the current code would give. The full benchmark has not been rerun.
+> I did **not** regenerate `bench/results/*` or any number in this document. They predate that change, so the sort times and the sort share of the Grid time below are higher than the current code would give. I haven't rerun the full benchmark.
 
 Terms used here:
 
@@ -37,7 +37,7 @@ From the repository root, in PowerShell:
 .\build\release\bench\vis_bench.exe --out bench\results\results.csv
 ```
 
-The full run took 1340 s on the machine below (console line `done in 1340.1 s`). The log, `build/bench_full.log`, is not committed.
+The full run took 1340 s on the machine below (console line `done in 1340.1 s`). I didn't commit the log, `build/bench_full.log`.
 
 The command writes three files next to `--out`: `results.csv`, `grid_sweep.csv` and `results.meta.txt`.
 
@@ -67,7 +67,7 @@ From `bench/results/results.meta.txt`:
 | Time budget per mode and row | 10 s |
 | World | 1600x1000 |
 
-As far as anyone could see, the machine wasn't otherwise loaded. Power and thermal state were not controlled or recorded (see Limitations).
+As far as I could tell, the machine wasn't otherwise loaded. I didn't control or record power and thermal state (see Limitations).
 
 ## Method
 
@@ -230,9 +230,9 @@ Median over seeds. You pay both numbers once per edit, not per frame. `addWall` 
 
 ## Limitations
 
-- **Hardware and drift.** One laptop-class CPU (see Environment). Clocks and power state were not pinned, and rows run minutes apart. Compare Brute and Grid within a row, since they alternate in time, and treat absolute times as indicative. As a consistency check: Brute for the Scatter n=1000, seed 1 scene is 20.6 ms in the main table row and 21.9 ms in the 1x sweep row.
+- **Hardware and drift.** One laptop-class CPU (see Environment). I didn't pin clocks or power state, and rows run minutes apart. Compare Brute and Grid within a row, since they alternate in time, and treat absolute times as indicative. As a consistency check: Brute for the Scatter n=1000, seed 1 scene is 20.6 ms in the main table row and 21.9 ms in the 1x sweep row.
 - **Spread.** The largest maximum-to-median ratios are 2.90 (Grid, Scatter n=500 seed 2) and 1.87 (Brute, Long walls n=250 seed 3). Minima and maxima of every row are in `results.csv` (`*_min_us`, `*_max_us`).
 - **Few samples and positions on the largest rows.** See the Positions and Samples columns. Brute rows at n >= 2000 have 3 or 4 samples. The n = 1000 rows have 3 to 10.
 - **One world size.** All scenes are 1600 x 1000 with one light, single-threaded.
 - **Gate scope.** The Brute/Grid equality gate covers the positions timed in each row, which is a single position on the single-position rows. Broader equality checks are in the test suite (`differential: ...` test cases in `tests/test_differential.cpp`).
-- Results are for the build in `results.meta.txt`. Other compilers, flags or machines were not measured.
+- Results are for the build in `results.meta.txt`. I didn't measure other compilers, flags or machines.

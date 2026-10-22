@@ -2,7 +2,7 @@
 
 # The demo application in detail
 
-A reference for `vis_app`. Flags and the script language are in [RUNNING.md](RUNNING.md). The algorithm is explained in [WALKTHROUGH.md](WALKTHROUGH.md) and [ARCHITECTURE.md](ARCHITECTURE.md). Measured costs are in [BENCHMARK.md](BENCHMARK.md).
+A reference for `vis_app`. Flags and the script language are in [RUNNING.md](RUNNING.md). The algorithm is in [WALKTHROUGH.md](WALKTHROUGH.md) and [ARCHITECTURE.md](ARCHITECTURE.md). Measured costs are in [BENCHMARK.md](BENCHMARK.md).
 
 Contents: [Window layout](#window-layout) · [Simple and Engine](#two-levels-simple-and-engine) · [The panel](#the-panel) · [Legend and wall fading](#legend-and-wall-fading) · [The work meter](#the-work-meter) · [Guided tour](#guided-tour) · [Mouse and keys](#mouse-and-keys) · [What Engine adds](#what-engine-adds) · [Display scaling](#display-scaling)
 
@@ -20,7 +20,7 @@ A "Drag me" tag points at the light until you've dragged it once. The smallest w
 The two buttons at the top of the panel switch the level.
 
 - **Simple** is the default. It uses plain words and fits a 1280 x 800 window without scrolling.
-- **Engine** adds the precise numbers and terms. Every number there is the same one the first version of the application showed, with the same meaning.
+- **Engine** adds the precise numbers and terms. Every number there is one the first version of the app showed, with the same meaning.
 
 Hover a `(?)` or a row label for a one-sentence explanation of the term.
 
@@ -31,7 +31,7 @@ Top to bottom:
 | Section | What it holds |
 |---|---|
 | "Light and walls" | "Move the light, draw walls, compare methods.", the hint "Drag the floor to draw, right-click to erase.", and a "Tour" button |
-| Method cards | **All walls** ("Baseline: checks every wall.") is the Baseline back end: every ray is tested against every wall. It's called Baseline in the first version of the interface, the benchmark and these documents, and `Brute` in the code and `--mode brute`. **Grid** ("Checks only nearby walls.") is the Grid back end: a ray only tests the walls in the grid squares it crosses. Under the cards: "Same picture, different amount of work." Both give exactly the same picture. The card in use is highlighted |
+| Method cards | **All walls** ("Baseline: checks every wall.") is the Baseline back end: every ray is tested against every wall. I call it Baseline in the first version of the interface, the benchmark and these documents, and `Brute` in the code and `--mode brute`. **Grid** ("Checks only nearby walls.") is the Grid back end: a ray only tests the walls in the grid squares it crosses. Under the cards: "Same picture, different amount of work." Both give exactly the same picture. The card in use is highlighted |
 | Show | **Light only** (overlay `off`), **Squares** (`grid`, formerly "Grid cells": squares tinted by how many rays crossed them), **One ray** (`probe`, formerly "Probe ray": the ray nearest the cursor, the squares it crossed and the walls it tested), **All rays** (`rays`). A caption under the choice describes what's on screen in one live sentence (see below). "Outline" (formerly "Outline visibility polygon") draws the edge of the lit region, the visibility polygon. In Engine the probe's numbers are listed here: squares crossed, walls tested "X of N", `tMinus`, `tPlus` |
 | Work | The work meter, [below](#the-work-meter) |
 | Scene cards | **Demo** (key `R`), **Scatter** (`1`), **Maze** (`2`), **Long walls** (`3`), **Cluster** (`4`), each with a one-line description (for example "Where the grid shines."). The **Walls** slider picks 100, 250, 500, 1,000, 2,000, 3,000 or 5,000 walls for the generated scenes. Releasing it rebuilds the current generated scene (it does nothing to the demo room). Then **Clear** (`C`) and **Reset** (`R`). A short orange note appears under the cards when "All walls" would take about 30 ms or more per update in the current scene, for example "All walls is slow here: ~246 ms per update." |
@@ -81,10 +81,10 @@ Where the two numbers come from (`App::updateMeter`, `app/app.cpp`; `WorkMeter`,
   - In Baseline with Compare off there's no Grid query, so the application runs **one extra Grid query per update**, only to read this counter. That pass isn't timed, and its result is never added to any displayed time.
 
   All three give the same count for the same light position (the script checks this).
-- **When the extra pass is skipped.** If rays x walls is above 20,000,000 (`kMeterSkipTests`), the extra pass doesn't run while the light or the scene is changing. That way "All walls" never gets slower for the meter's sake.
+- **When the extra pass is skipped.** If rays x walls is above 20,000,000 (`kMeterSkipTests`), the extra pass doesn't run while the light or the scene is changing. So "All walls" never gets slower for the meter's sake.
   - The grid bar then shows "not measured" on a dashed track, and the sentence reads "Measuring once you stop."
   - One update later, once nothing is changing, the application runs one untimed extra Grid pass and the real figure appears (`meter_source` is then `extra_pass`).
-  - Before this change the figure was never measured in All walls mode on such scenes.
+  - Before I added this, the figure was never measured in All walls mode on such scenes.
   - The threshold is a work count, not a time, so it's the same on every machine.
 - **Verdict sentences.** The sentence changes to "Grid helps little" when the grid does 90% or more of the baseline work. It's followed by ": walls bunched in a few squares." or ": long walls cover lots of squares." when the scene shows it. Below 1% it reads "Grid does under 1% of the work."
 - **Settle rule.** After a change, updates slower than 50 ms are repeated only once more (`settle` in `App::updateVisibility`) instead of the usual 8 times. That's just enough to finish the meter.
@@ -142,4 +142,4 @@ In Engine the panel also has:
 
 At launch the window and its minimum size are scaled by the display's DPI scale (`GLFW_SCALE_TO_MONITOR`, interactive runs only). Moving the window to a monitor with a different scale does not rescale the interface.
 
-**This was not verified on a scaled display.** Behaviour at 150% or 200% scaling on the test machine was not tested. Headless runs (`--capture`, `--script`) stay at 100%.
+**I haven't verified this on a scaled display.** I didn't test 150% or 200% scaling on my machine. Headless runs (`--capture`, `--script`) stay at 100%.
