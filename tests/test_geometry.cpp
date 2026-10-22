@@ -167,6 +167,7 @@ TEST_CASE("intersectSegments classification") {
 TEST_CASE("intersectSegments agrees with plain parametric algebra on generic segments") {
     Rng rng(0xC0FFEE);
     int crosses = 0;
+    Tally tally;
     for (int i = 0; i < scaled(20000); ++i) {
         const Segment s{{rng.range(0, 10), rng.range(0, 10)}, {rng.range(0, 10), rng.range(0, 10)}};
         const Segment t{{rng.range(0, 10), rng.range(0, 10)}, {rng.range(0, 10), rng.range(0, 10)}};
@@ -180,13 +181,14 @@ TEST_CASE("intersectSegments agrees with plain parametric algebra on generic seg
         const bool expected = ts > 0 && ts < 1 && us > 0 && us < 1;
         Vec2 p;
         const bool got = intersectSegments(s, t, p) == SegHit::Cross;
-        CHECK(got == expected);
+        TALLY(tally, got == expected, "sample " << i << ": intersectSegments says " << got << ", algebra says " << expected);
         if (got && expected) {
             ++crosses;
-            CHECK(p.x == doctest::Approx(s.a.x + ts * r.x).epsilon(1e-9));
-            CHECK(p.y == doctest::Approx(s.a.y + ts * r.y).epsilon(1e-9));
+            TALLY(tally, p.x == doctest::Approx(s.a.x + ts * r.x).epsilon(1e-9), "sample " << i << ": crossing x " << p.x << " vs " << s.a.x + ts * r.x);
+            TALLY(tally, p.y == doctest::Approx(s.a.y + ts * r.y).epsilon(1e-9), "sample " << i << ": crossing y " << p.y << " vs " << s.a.y + ts * r.y);
         }
     }
+    TALLY_CHECK(tally);
     CHECK(crosses > scaled(1000));
 }
 
@@ -307,11 +309,13 @@ TEST_CASE("Rng and generators are deterministic") {
 
     Rng a(42), b(42), c(43);
     bool differs = false;
+    Tally same;
     for (int i = 0; i < 100; ++i) {
         const auto va = a.next();
-        CHECK(va == b.next());
+        TALLY(same, va == b.next(), "same seed diverged at draw " << i);
         differs |= va != c.next();
     }
+    TALLY_CHECK(same);
     CHECK(differs);
 
     for (SceneKind k : {SceneKind::Scatter, SceneKind::Maze, SceneKind::LongWalls, SceneKind::Cluster}) {
@@ -327,13 +331,13 @@ TEST_CASE("Rng and generators are deterministic") {
 }
 
 TEST_CASE("generators: long-walls crossing count stays far below n^2/4 at n = 1000") {
+    Tally tally;
     for (std::uint64_t seed : {1u, 2u, 3u}) {
         const Scene s = makeLongWallsScene(1000, seed);
         const double k = static_cast<double>(s.intersections().size());
-        INFO("seed " << seed << " k = " << k);
-        CHECK(k >= 10.0 * 1000);
-        CHECK(k <= 30.0 * 1000);
+        TALLY(tally, k >= 10.0 * 1000 && k <= 30.0 * 1000, "seed " << seed << " k = " << k << " outside [10n, 30n]");
     }
+    TALLY_CHECK(tally);
 }
 
 // Regression: a wall that is exactly on opposite sides of the ray (orient) but so nearly end-on that
@@ -465,14 +469,16 @@ TEST_CASE("Scene::addWall rejects coordinates of huge magnitude") {
 }
 
 TEST_CASE("makeSceneWalls + one setWalls equals makeScene (the app's single-rebuild load path)") {
+    Tally tally;
     for (SceneKind k : {SceneKind::Demo, SceneKind::Scatter, SceneKind::Maze, SceneKind::LongWalls, SceneKind::Cluster}) {
         Scene s(kStressWidth, kStressHeight);
         s.setGridResolution(7, 5);  // a manual resolution set before the single load survives it
         const std::uint64_t before = s.revision();
         s.setWalls(makeSceneWalls(k, 300, 7));
-        CHECK(s.revision() == before + 1);  // exactly one rebuild
-        CHECK(s.grid().cols() == 7);
-        CHECK(s.grid().rows() == 5);
-        CHECK(s.walls() == makeScene(k, 300, 7).walls());
+        const std::string kind = sceneKindName(k);
+        TALLY(tally, s.revision() == before + 1, kind << ": not exactly one rebuild");
+        TALLY(tally, s.grid().cols() == 7 && s.grid().rows() == 5, kind << ": manual grid resolution lost");
+        TALLY(tally, s.walls() == makeScene(k, 300, 7).walls(), kind << ": walls differ from makeScene");
     }
+    TALLY_CHECK(tally);
 }

@@ -25,6 +25,22 @@ namespace tutil {
 // and sanitizer builds). Every test case still runs; only the number of random trials shrinks.
 inline int scaled(int n) { return std::max(1, n / VIS_TEST_SCALE); }
 
+// Failure accumulator for loops that run thousands of comparisons: count mismatches, remember the
+// first failing detail, and report with one doctest assertion after the loop (TALLY_CHECK).
+struct Tally {
+    long long n = 0;      // comparisons made
+    long long fails = 0;  // comparisons that failed
+    std::string first;    // detail of the first failure
+    template <class F>
+    void bad(F&& describeFailure) {
+        if (fails++ == 0) first = describeFailure();
+    }
+};
+
+#define TALLY(t, cond, msg)                                     do {                                                            ++(t).n;                                                    if (!(cond)) (t).bad([&] {                                      std::ostringstream tally_os_;                               tally_os_ << msg;                                           return tally_os_.str();                                 });                                                     } while (0)
+
+#define TALLY_CHECK(t)     CHECK_MESSAGE((t).fails == 0, (t).fails << " of " << (t).n << " comparisons failed; first: " << (t).first)
+
 using vis::Mode;
 using vis::Scene;
 using vis::Segment;

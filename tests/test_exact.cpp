@@ -50,6 +50,7 @@ Vec2 latPoint(const long long p[2]) { return {lat(p[0]), lat(p[1])}; }
 
 TEST_CASE("orient: small integers times powers of two, exact int64 reference") {
     Rng rng(0x0123);
+    Tally tally;
     for (int i = 0; i < scaled(200000); ++i) {
         const int e = rng.below(41) - 20;
         const double s = std::ldexp(1.0, e);
@@ -62,14 +63,16 @@ TEST_CASE("orient: small integers times powers of two, exact int64 reference") {
         }
         const Vec2 a{p[0][0] * s, p[0][1] * s}, b{p[1][0] * s, p[1][1] * s}, c{p[2][0] * s, p[2][1] * s};
         const int expect = refOrient(p[0], p[1], p[2]);
-        if (orient(a, b, c) != expect) FAIL_CHECK("small-int mismatch at " << i << " e=" << e << " expected " << expect);
+        TALLY(tally, orient(a, b, c) == expect, "small-int mismatch at " << i << " e=" << e << " expected " << expect);
     }
+    TALLY_CHECK(tally);
 }
 
 TEST_CASE("orient: doubles in [1,2) as 2^-52 lattice, collinear and 1-ulp-perturbed triples") {
     Rng rng(0x0456);
     const long long span = 1ll << 52;
     long long zeros = 0, nonzeros = 0;
+    Tally tally;
     for (int i = 0; i < scaled(200000); ++i) {
         long long p[3][2];
         switch (i % 4) {
@@ -100,11 +103,12 @@ TEST_CASE("orient: doubles in [1,2) as 2^-52 lattice, collinear and 1-ulp-pertur
         }
         const Vec2 a = latPoint(p[0]), b = latPoint(p[1]), c = latPoint(p[2]);
         // sanity: the +-1 steps above are exactly nextafter neighbours
-        CHECK(std::nextafter(a.x, 2.0) == lat(p[0][0] + 1));
+        TALLY(tally, std::nextafter(a.x, 2.0) == lat(p[0][0] + 1), "lattice neighbour is not nextafter at " << i);
         const int expect = refOrient(p[0], p[1], p[2]);
         (expect == 0 ? zeros : nonzeros)++;
-        if (orient(a, b, c) != expect) FAIL_CHECK("lattice mismatch at " << i << " kind " << i % 4 << " expected " << expect);
+        TALLY(tally, orient(a, b, c) == expect, "lattice mismatch at " << i << " kind " << i % 4 << " expected " << expect);
     }
+    TALLY_CHECK(tally);
     CHECK(zeros > scaled(40000));    // many exact zeros: the filter must not report a sign for them
     CHECK(nonzeros > scaled(100000));
 }
@@ -114,27 +118,31 @@ TEST_CASE("orient: classic near-collinear sweep (Kettner et al.)") {
     // det = 11.5 * u * (j - i): the exact sign is sign(j - i), a rounded determinant cannot see this.
     const double u = std::ldexp(1.0, -53);
     const Vec2 a{0.5, 0.5};
+    Tally tally;
     for (const Vec2 b : {Vec2{12, 12}, Vec2{24, 24}, Vec2{1, 1}}) {
         for (int i = 0; i < 256; ++i)
             for (int j = 0; j < 256; ++j) {
                 const Vec2 c{0.5 + i * u, 0.5 + j * u};
                 const int expect = (j > i) - (j < i);
-                if (orient(a, b, c) != expect) FAIL_CHECK("sweep i=" << i << " j=" << j << " b=" << str(b));
+                TALLY(tally, orient(a, b, c) == expect, "sweep i=" << i << " j=" << j << " b=" << str(b));
             }
     }
+    TALLY_CHECK(tally);
 }
 
 TEST_CASE("orient: cyclic invariance and antisymmetry hold exactly, also for nearly collinear doubles") {
     Rng rng(0x0789);
+    Tally tally;
     for (int i = 0; i < scaled(100000); ++i) {
         Vec2 a{rng.range(-100, 100), rng.range(-100, 100)};
         Vec2 b{rng.range(-100, 100), rng.range(-100, 100)};
         Vec2 c = a + (b - a) * rng.range(-2.0, 3.0);  // nearly on the line
         for (int k = rng.below(3); k > 0; --k) c.x = std::nextafter(c.x, rng.below(2) ? 1e9 : -1e9);
         const int o = orient(a, b, c);
-        if (orient(b, c, a) != o || orient(c, a, b) != o || orient(b, a, c) != -o || orient(a, c, b) != -o)
-            FAIL_CHECK("symmetry violated at " << i);
+        TALLY(tally, orient(b, c, a) == o && orient(c, a, b) == o && orient(b, a, c) == -o && orient(a, c, b) == -o,
+              "symmetry violated at " << i);
     }
+    TALLY_CHECK(tally);
 }
 
 TEST_CASE("orient: exact on an exactly collinear triple that a rounded cross product misjudges") {
@@ -171,11 +179,12 @@ TEST_CASE("angleLess: strict weak ordering with exactly and nearly collinear clu
     const auto equiv = [&](Vec2 p, Vec2 q) { return !less(p, q) && !less(q, p); };
 
     const std::size_t n = pts.size();
-    for (std::size_t i = 0; i < n; ++i) CHECK_FALSE(less(pts[i], pts[i]));
+    Tally tally;
+    for (std::size_t i = 0; i < n; ++i) TALLY(tally, !less(pts[i], pts[i]), "irreflexivity violated at " << str(pts[i]));
     long long equivalentPairs = 0;
     for (std::size_t i = 0; i < n; ++i)
         for (std::size_t j = 0; j < n; ++j) {
-            if (less(pts[i], pts[j])) CHECK_FALSE(less(pts[j], pts[i]));  // asymmetry
+            if (less(pts[i], pts[j])) TALLY(tally, !less(pts[j], pts[i]), "asymmetry violated for " << str(pts[i]) << " " << str(pts[j]));
             if (i != j && equiv(pts[i], pts[j])) ++equivalentPairs;
         }
     CHECK(equivalentPairs > 20);  // the test really contains exactly collinear same-direction clusters
@@ -184,8 +193,8 @@ TEST_CASE("angleLess: strict weak ordering with exactly and nearly collinear clu
         for (std::size_t j = 0; j < n; ++j)
             for (std::size_t k = 0; k < n; k += 3) {
                 const Vec2 p = pts[i], q = pts[j], r = pts[k];
-                if (less(p, q) && less(q, r) && !less(p, r)) FAIL_CHECK("transitivity of < violated");
-                if (equiv(p, q) && equiv(q, r) && !equiv(p, r)) FAIL_CHECK("transitivity of equivalence violated");
+                TALLY(tally, !(less(p, q) && less(q, r) && !less(p, r)), "transitivity of < violated");
+                TALLY(tally, !(equiv(p, q) && equiv(q, r) && !equiv(p, r)), "transitivity of equivalence violated");
                 ++checked;
             }
     CHECK(checked > 10000);
@@ -193,7 +202,7 @@ TEST_CASE("angleLess: strict weak ordering with exactly and nearly collinear clu
     std::vector<Vec2> sorted = pts;
     std::sort(sorted.begin(), sorted.end(), less);
     for (std::size_t i = 0; i + 1 < sorted.size(); ++i)
-        if (less(sorted[i + 1], sorted[i])) FAIL_CHECK("adjacent inversion at " << i);
+        TALLY(tally, !less(sorted[i + 1], sorted[i]), "adjacent inversion at " << i);
 
     // Independent check: well separated directions must follow atan2 mapped to [0, 2pi).
     const auto angle = [&](Vec2 p) {
@@ -202,7 +211,8 @@ TEST_CASE("angleLess: strict weak ordering with exactly and nearly collinear clu
     };
     for (std::size_t i = 0; i + 1 < sorted.size(); ++i)
         for (std::size_t j = i + 1; j < sorted.size(); ++j)
-            if (angle(sorted[j]) < angle(sorted[i]) - 1e-9) FAIL_CHECK("order disagrees with atan2 at " << i << "," << j);
+            TALLY(tally, !(angle(sorted[j]) < angle(sorted[i]) - 1e-9), "order disagrees with atan2 at " << i << "," << j);
+    TALLY_CHECK(tally);
 }
 
 TEST_CASE("angleLess: half-turn split, direction along +x first and -x last") {
@@ -264,6 +274,7 @@ TEST_CASE("orient: mixed exponents so that b-a and c-a round (the low terms of t
     // skipped.
     Rng rng(0xBEEF);
     long long checked = 0, inexact = 0, zeros = 0;
+    Tally tally;
     for (int i = 0; i < scaled(300000); ++i) {
         double v[6];
         const int kind = i % 3;
@@ -291,8 +302,9 @@ TEST_CASE("orient: mixed exponents so that b-a and c-a round (the low terms of t
         zeros += expect == 0;
         const double dx = b.x - a.x, dy = c.y - a.y;
         inexact += ((dx + a.x) != b.x) || ((dy + a.y) != c.y);
-        if (orient(a, b, c) != expect) FAIL_CHECK("mixed-exponent mismatch at " << i << " kind " << kind << " expected " << expect);
+        TALLY(tally, orient(a, b, c) == expect, "mixed-exponent mismatch at " << i << " kind " << kind << " expected " << expect);
     }
+    TALLY_CHECK(tally);
     CHECK(checked > scaled(100000));
     CHECK(inexact > checked / 10);  // the differences really do round in a good share of the samples
     CHECK(zeros > checked / 20);    // and exact zeros occur (collinear construction)

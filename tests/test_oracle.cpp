@@ -71,14 +71,14 @@ TEST_CASE("oracle: polygon membership equals the segment-crossing predicate") {
     // for q within about that distance of a shadow line. 1e-6 is seven orders above both.
     constexpr double kBand = 1e-6;
     long long compared = 0, skipped = 0, litTotal = 0;
+    Tally tally;
     for (const OracleCase& c : makeCases(0x5EED0000, scaled(120))) {
         Rng rng(0xABCDEF ^ static_cast<std::uint64_t>(c.scene.wallCount()));
         for (Vec2 light : c.lights) {
             for (Mode mode : {Mode::Brute, Mode::Grid}) {
                 const Poly poly = query(c.scene, light, mode);
-                REQUIRE(poly.size() >= 3);
-                long long mismatches = 0;
-                Vec2 firstBad{};
+                TALLY(tally, poly.size() >= 3, c.label << " light " << str(light) << ": polygon has " << poly.size() << " vertices");
+                if (poly.size() < 3) continue;
                 for (int k = 0; k < scaled(250); ++k) {
                     const Vec2 q{rng.range(0, c.scene.width()), rng.range(0, c.scene.height())};
                     if (distToBoundary(poly, q) < kBand) { ++skipped; continue; }
@@ -86,14 +86,14 @@ TEST_CASE("oracle: polygon membership equals the segment-crossing predicate") {
                     const bool in = pointInPolygon(poly, q);
                     ++compared;
                     litTotal += lit;
-                    if (lit != in && mismatches++ == 0) firstBad = q;
+                    TALLY(tally, lit == in, c.label << " light " << str(light) << " mode "
+                                                    << (mode == Mode::Brute ? "Brute" : "Grid") << " mismatching q " << str(q)
+                                                    << " (lit " << lit << ", in polygon " << in << ")");
                 }
-                INFO(c.label << " light " << str(light) << " mode " << std::string(mode == Mode::Brute ? "Brute" : "Grid")
-                             << " first mismatching q " << str(firstBad));
-                CHECK(mismatches == 0);
             }
         }
     }
+    TALLY_CHECK(tally);
     // guard against a vacuous test: plenty of points, and both lit and shadowed ones
     CHECK(compared > scaled(scaled(50000)));  // scenes and samples are both scaled
     CHECK(litTotal > compared / 10);
@@ -109,6 +109,7 @@ TEST_CASE("oracle: polygon area equals dense angular sampling") {
     const int kSamples = scaled(200000);
     const double dTheta = 2.0 * 3.14159265358979323846 / kSamples;
     double worstRatio = 0.0;
+    Tally tally;
     for (const OracleCase& c : makeCases(0xA5EA0000, scaled(40))) {
         const double rmax2 = c.scene.width() * c.scene.width() + c.scene.height() * c.scene.height();
         for (Vec2 light : c.lights) {
@@ -121,12 +122,13 @@ TEST_CASE("oracle: polygon area equals dense angular sampling") {
             }
             const double tol = (static_cast<double>(poly.size()) + 2.0) * 0.5 * rmax2 * dTheta;
             const double err = std::fabs(signedArea(poly) - sampled);
-            INFO(c.label << " light " << str(light) << " V=" << poly.size() << " area " << signedArea(poly)
-                         << " sampled " << sampled << " tol " << tol);
-            CHECK(err <= tol);
+            TALLY(tally, err <= tol, c.label << " light " << str(light) << " V=" << poly.size() << " area " << signedArea(poly)
+                                              << " sampled " << sampled << " tol " << tol);
             worstRatio = std::max(worstRatio, err / tol);
         }
     }
+    TALLY_CHECK(tally);
+    CHECK(tally.n > 0);
     MESSAGE("worst |error| / tolerance = " << worstRatio);
 }
 
@@ -150,6 +152,7 @@ TEST_CASE("oracle: decimal and non-dyadic lattices (grid snap 0.1, spacing 1600/
     };
     long long compared = 0, lightsUsed = 0;
     int caseIndex = 0;
+    Tally tally;
     for (const Family& f : families) {
         for (int c = 0; c < scaled(60); ++c, ++caseIndex) {
             const std::uint64_t seed = 0xDEC10000 + static_cast<std::uint64_t>(caseIndex);
@@ -181,24 +184,22 @@ TEST_CASE("oracle: decimal and non-dyadic lattices (grid snap 0.1, spacing 1600/
                 ++lightsUsed;
                 for (Mode mode : {Mode::Brute, Mode::Grid}) {
                     const Poly poly = query(scene, light, mode);
-                    REQUIRE(poly.size() >= 3);
-                    long long mismatches = 0;
-                    Vec2 firstBad{};
+                    TALLY(tally, poly.size() >= 3, f.name << " seed " << seed << " light " << str(light) << ": polygon has " << poly.size() << " vertices");
+                    if (poly.size() < 3) continue;
                     for (int k = 0; k < scaled(300); ++k) {
                         const Vec2 q{qr.range(0, f.w), qr.range(0, f.h)};
                         if (distToBoundary(poly, q) < kBand * std::max(f.w, f.h) * 1e-3) continue;
                         const bool lit = litByDefinition(scene, light, q);
                         const bool in = pointInPolygon(poly, q);
                         ++compared;
-                        if (lit != in && mismatches++ == 0) firstBad = q;
+                        TALLY(tally, lit == in, f.name << " seed " << seed << " light " << str(light) << " mode "
+                                                      << (mode == Mode::Brute ? "Brute" : "Grid") << " mismatching q " << str(q));
                     }
-                    INFO(f.name << " seed " << seed << " light " << str(light) << " mode "
-                                << std::string(mode == Mode::Brute ? "Brute" : "Grid") << " first mismatching q " << str(firstBad));
-                    CHECK(mismatches == 0);
                 }
             }
         }
     }
+    TALLY_CHECK(tally);
     CHECK(lightsUsed > scaled(500));
     CHECK(compared > scaled(scaled(100000)));
 }
@@ -212,6 +213,7 @@ TEST_CASE("oracle: decimal and non-dyadic lattices (grid snap 0.1, spacing 1600/
 // (a neighbouring sliver) are skipped, because there "which edge am I near" is the question.
 TEST_CASE("oracle: points just inside and just outside every polygon edge agree with the predicate") {
     long long edgesTested = 0, probes = 0, skipped = 0;
+    Tally tally;
     for (const OracleCase& c : makeCases(0xED6E0000, scaled(100))) {
         const double off = 1e-4 * std::max(c.scene.width(), c.scene.height()) / 1600.0;
         for (Vec2 light : c.lights) {
@@ -235,12 +237,13 @@ TEST_CASE("oracle: points just inside and just outside every polygon edge agree 
                     ++probes;
                     const bool lit = litByDefinition(c.scene, light, q);
                     const bool in = pointInPolygon(poly, q);
-                    INFO(c.label << " light " << str(light) << " edge " << i << " side " << side << " probe " << str(q));
-                    CHECK(lit == in);
+                    TALLY(tally, lit == in, c.label << " light " << str(light) << " edge " << i << " side " << side << " probe "
+                                                    << str(q) << " (lit " << lit << ", in polygon " << in << ")");
                 }
             }
         }
     }
+    TALLY_CHECK(tally);
     CHECK(edgesTested > scaled(2000));
     CHECK(probes > scaled(3000));
     CHECK(skipped < probes);
