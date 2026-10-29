@@ -32,18 +32,15 @@ const Poly kRect{{0, 0}, {100, 0}, {100, 100}, {0, 100}};
 
 }  // namespace
 
-TEST_CASE("empty world: the world rectangle") {
+TEST_CASE("empty world: the world rectangle, area W*H") {
+    struct Case { double w, h; std::vector<Vec2> lights; };
+    const Case cases[] = {{100, 100, {{30, 40}, {99.5, 0.5}}}, {160, 90, {{10, 80}}}};  // second is non-square
     Tally t;
-    const Scene s = makeScene(100, 100, {});
-    expectPolygon(t, s, {30, 40}, kRect, 10000.0);
-    expectPolygon(t, s, {99.5, 0.5}, kRect, 10000.0);
-    TALLY_CHECK(t);
-}
-
-TEST_CASE("empty world, non-square: area W*H") {
-    Tally t;
-    const Scene s = makeScene(160, 90, {});
-    expectPolygon(t, s, {10, 80}, {{0, 0}, {160, 0}, {160, 90}, {0, 90}}, 14400.0);
+    for (const Case& c : cases) {
+        const Scene s = makeScene(c.w, c.h, {});
+        const Poly rect{{0, 0}, {c.w, 0}, {c.w, c.h}, {0, c.h}};
+        for (Vec2 light : c.lights) expectPolygon(t, s, light, rect, c.w * c.h);
+    }
     TALLY_CHECK(t);
 }
 
@@ -133,40 +130,35 @@ TEST_CASE("light exactly on a wall interior: it shines to both sides") {
     TALLY_CHECK(t);
 }
 
-TEST_CASE("light exactly on a wall endpoint") {
+TEST_CASE("degenerate light placement: on a wall endpoint, a world corner, the world boundary") {
+    struct Case { std::vector<Segment> walls; Vec2 light; Poly expected; double area; };
+    const Case cases[] = {
+        // Light exactly on a wall endpoint.
+        {{{{50, 50}, {80, 50}}}, {50, 50}, kRect, 10000.0},
+        {{{{50, 50}, {80, 90}}}, {50, 50}, kRect, 10000.0},
+        {{{{20, 70}, {50, 50}}}, {50, 50}, kRect, 10000.0},
+        // Light on a world corner.
+        {{}, {0, 0}, kRect, 10000.0},
+        {{}, {100, 0}, kRect, 10000.0},
+        {{}, {100, 100}, kRect, 10000.0},
+        {{}, {0, 100}, kRect, 10000.0},
+        // L=(0,0), wall (60,20)-(60,80). Through (60,20): d=(60,20) reaches x=100 at y=100/3. Through
+        // (60,80): d=(60,80) reaches y=100 at t=1.25, x=75. Shoelace of
+        // (0,0),(100,0),(100,100/3),(60,20),(60,80),(75,100),(0,100) = 43300/3 /2 = 21650/3.
+        {{{{60, 20}, {60, 80}}}, {0, 0}, {{0, 0}, {100, 0}, {100, 100.0 / 3}, {60, 20}, {60, 80}, {75, 100}, {0, 100}},
+         21650.0 / 3},
+        // Light on the world boundary. L=(50,0), wall (35,40)-(65,40). Through the ends d=(-/+15,40) reach
+        // y=100 at t=2.5: x = 12.5, 87.5. Shadow trapezoid widths 30 and 75 over 60 = 3150, visible 6850.
+        // (L itself is a collinear vertex.)
+        {{{{35, 40}, {65, 40}}}, {50, 0},
+         {{0, 0}, {100, 0}, {100, 100}, {87.5, 100}, {65, 40}, {35, 40}, {12.5, 100}, {0, 100}}, 6850.0},
+        // Mirror image on the left edge: L=(0,50), wall (40,35)-(40,65).
+        {{{{40, 35}, {40, 65}}}, {0, 50},
+         {{0, 0}, {100, 0}, {100, 12.5}, {40, 35}, {40, 65}, {100, 87.5}, {100, 100}, {0, 100}}, 6850.0},
+        {{}, {37.5, 100}, kRect, 10000.0},
+    };
     Tally t;
-    expectPolygon(t, makeScene(100, 100, {{{50, 50}, {80, 50}}}), {50, 50}, kRect, 10000.0);
-    expectPolygon(t, makeScene(100, 100, {{{50, 50}, {80, 90}}}), {50, 50}, kRect, 10000.0);
-    expectPolygon(t, makeScene(100, 100, {{{20, 70}, {50, 50}}}), {50, 50}, kRect, 10000.0);
-    TALLY_CHECK(t);
-}
-
-TEST_CASE("light on a world corner") {
-    Tally t;
-    const Scene empty = makeScene(100, 100, {});
-    for (Vec2 c : {Vec2{0, 0}, Vec2{100, 0}, Vec2{100, 100}, Vec2{0, 100}}) expectPolygon(t, empty, c, kRect, 10000.0);
-
-    // L=(0,0), wall (60,20)-(60,80). Through (60,20): d=(60,20) reaches x=100 at y=100/3. Through
-    // (60,80): d=(60,80) reaches y=100 at t=1.25, x=75. Shoelace of
-    // (0,0),(100,0),(100,100/3),(60,20),(60,80),(75,100),(0,100) = 43300/3 /2 = 21650/3.
-    const Scene s = makeScene(100, 100, {{{60, 20}, {60, 80}}});
-    expectPolygon(t, s, {0, 0}, {{0, 0}, {100, 0}, {100, 100.0 / 3}, {60, 20}, {60, 80}, {75, 100}, {0, 100}},
-                  21650.0 / 3);
-    TALLY_CHECK(t);
-}
-
-TEST_CASE("light on the world boundary") {
-    Tally t;
-    // L=(50,0), wall (35,40)-(65,40). Through the ends d=(-/+15,40) reach y=100 at t=2.5: x = 12.5, 87.5.
-    // Shadow trapezoid widths 30 and 75 over 60 = 3150, visible 6850. (L itself is a collinear vertex.)
-    const Scene bottom = makeScene(100, 100, {{{35, 40}, {65, 40}}});
-    expectPolygon(t, bottom, {50, 0},
-                  {{0, 0}, {100, 0}, {100, 100}, {87.5, 100}, {65, 40}, {35, 40}, {12.5, 100}, {0, 100}}, 6850.0);
-    // Mirror image on the left edge: L=(0,50), wall (40,35)-(40,65).
-    const Scene left = makeScene(100, 100, {{{40, 35}, {40, 65}}});
-    expectPolygon(t, left, {0, 50},
-                  {{0, 0}, {100, 0}, {100, 12.5}, {40, 35}, {40, 65}, {100, 87.5}, {100, 100}, {0, 100}}, 6850.0);
-    expectPolygon(t, makeScene(100, 100, {}), {37.5, 100}, kRect, 10000.0);
+    for (const Case& c : cases) expectPolygon(t, makeScene(100, 100, c.walls), c.light, c.expected, c.area);
     TALLY_CHECK(t);
 }
 
