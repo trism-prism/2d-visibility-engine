@@ -2,7 +2,7 @@
 
 # Building, testing, running and benchmarking
 
-Related: [APP.md](APP.md) (the demo application in detail), [BENCHMARK.md](BENCHMARK.md) (benchmark results), [../STATUS.md](../STATUS.md).
+Related: [APP.md](APP.md) (the demo application in detail), [BENCHMARK.md](BENCHMARK.md) (benchmark results).
 
 ## Verified platform and prerequisites
 

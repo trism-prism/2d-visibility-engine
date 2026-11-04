@@ -28,7 +28,7 @@ One entry per decision that mattered: context, options, choice, cost, and what e
   - (b) Make the sort agree with the side tests through a shared rounded key.
   - (c) Use one exact orientation predicate for both decisions.
 - **Choice.** I chose (c): `orient` (floating-point filter, exact expansion fallback). The angular order, run collapse, `rayHit` and `intersectSegments` all use it.
-- **Cost.** I measured this on Scatter n=1000 when I made the change (`STATUS.md`):
+- **Cost.** I measured this on Scatter n=1000 when I made the change:
   - Grid query: about 410 us to about 700-750 us.
   - Brute: about 19 ms to about 30 ms.
   - The sort is now the largest part of the Grid query on Scatter and Maze ([BENCHMARK.md](BENCHMARK.md), "Split of the Grid time").
