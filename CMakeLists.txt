@@ -30,10 +30,14 @@ endif()
 include(FetchContent)
 set(FETCHCONTENT_QUIET ON)
 
-add_subdirectory(core)
-
 if(VIS_BUILD_TESTS)
   enable_testing()
+endif()
+
+add_subdirectory(core)
+add_subdirectory(bench)
+
+if(VIS_BUILD_TESTS)
   add_subdirectory(tests)
 endif()
 

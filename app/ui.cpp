@@ -53,12 +53,12 @@ void setupUi(App& app, float scale) {
     s.FrameRounding = 4.0f * scale;
     s.GrabRounding = 4.0f * scale;
     s.ChildRounding = 4.0f * scale;
-    s.WindowPadding = {12.0f * scale, 10.0f * scale};
-    s.FramePadding = {8.0f * scale, 4.0f * scale};
-    s.ItemSpacing = {8.0f * scale, 6.0f * scale};
+    s.WindowPadding = {12.0f * scale, 8.0f * scale};
+    s.FramePadding = {8.0f * scale, 3.0f * scale};
+    s.ItemSpacing = {8.0f * scale, 4.0f * scale};
     s.CellPadding = {4.0f * scale, 2.0f * scale};
     s.WindowBorderSize = 0.0f;
-    s.FrameBorderSize = 0.0f;
+    s.FrameBorderSize = 1.0f * scale;  // visible outline: off states of radios and checkboxes read clearly
     ImVec4* c = s.Colors;
     c[ImGuiCol_WindowBg] = ImVec4(0.075f, 0.082f, 0.105f, 1.0f);
     c[ImGuiCol_Text] = ImVec4(0.90f, 0.92f, 0.96f, 1.0f);
@@ -69,9 +69,10 @@ void setupUi(App& app, float scale) {
     c[ImGuiCol_Button] = ImVec4(0.16f, 0.19f, 0.26f, 1.0f);
     c[ImGuiCol_ButtonHovered] = ImVec4(0.22f, 0.30f, 0.42f, 1.0f);
     c[ImGuiCol_ButtonActive] = ImVec4(0.26f, 0.38f, 0.54f, 1.0f);
-    c[ImGuiCol_FrameBg] = ImVec4(0.11f, 0.125f, 0.165f, 1.0f);
-    c[ImGuiCol_FrameBgHovered] = ImVec4(0.15f, 0.17f, 0.23f, 1.0f);
-    c[ImGuiCol_FrameBgActive] = ImVec4(0.18f, 0.21f, 0.28f, 1.0f);
+    c[ImGuiCol_Border] = ImVec4(0.42f, 0.47f, 0.58f, 1.0f);
+    c[ImGuiCol_FrameBg] = ImVec4(0.15f, 0.17f, 0.23f, 1.0f);
+    c[ImGuiCol_FrameBgHovered] = ImVec4(0.20f, 0.23f, 0.30f, 1.0f);
+    c[ImGuiCol_FrameBgActive] = ImVec4(0.24f, 0.28f, 0.36f, 1.0f);
     c[ImGuiCol_CheckMark] = ImVec4(0.40f, 0.78f, 1.0f, 1.0f);
     c[ImGuiCol_SliderGrab] = ImVec4(0.40f, 0.70f, 0.95f, 1.0f);
     c[ImGuiCol_SliderGrabActive] = ImVec4(0.52f, 0.80f, 1.0f, 1.0f);
@@ -104,15 +105,24 @@ void App::drawPanel() {
         if (button(*this, "Reset demo", {half, 0})) resetDemo();
         ImGui::SameLine();
         if (button(*this, "Clear walls", {half, 0})) clearWalls();
-        if (button(*this, "Scatter - favourable", {full, 0})) loadScene(vis::SceneKind::Scatter);
-        if (button(*this, "Maze - mixed", {full, 0})) loadScene(vis::SceneKind::Maze);
-        if (button(*this, "Long walls - unfavourable", {full, 0})) loadScene(vis::SceneKind::LongWalls);
-        if (button(*this, "Cluster - unfavourable", {full, 0})) loadScene(vis::SceneKind::Cluster);
-        ImGui::SetNextItemWidth(full * 0.5f);
-        if (ImGui::InputInt("walls", &stressWalls, 100, 500)) stressWalls = std::clamp(stressWalls, 100, 5000);
-        ImGui::SetNextItemWidth(full * 0.5f);
-        if (ImGui::InputInt("seed", &seed, 1, 10)) seed = std::max(seed, 0);
-        sectionNote("Stress scenes use the wall count and seed above; the same pair always gives the same scene.");
+        if (button(*this, "Scatter - favourable", {half, 0})) loadScene(vis::SceneKind::Scatter);
+        ImGui::SameLine();
+        if (button(*this, "Maze - mixed", {half, 0})) loadScene(vis::SceneKind::Maze);
+        if (button(*this, "Long walls - unfavourable", {half, 0})) loadScene(vis::SceneKind::LongWalls);
+        ImGui::SameLine();
+        if (button(*this, "Cluster - unfavourable", {half, 0})) loadScene(vis::SceneKind::Cluster);
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("walls");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(full * 0.30f);
+        if (ImGui::InputInt("##walls", &stressWalls, 0)) stressWalls = std::clamp(stressWalls, 100, 5000);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Stress scene wall count, 100-5000. Same count + seed = same scene.");
+        ImGui::SameLine();
+        ImGui::TextUnformatted("seed");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(full * 0.30f);
+        if (ImGui::InputInt("##seed", &seed, 0)) seed = std::max(seed, 0);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Stress scene seed. Same count + seed = same scene.");
     }
 
     // ---- Overlay ----
@@ -239,7 +249,7 @@ void App::drawPanel() {
     }
 
     // ---- Grid ----
-    if (ImGui::CollapsingHeader("Grid", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::CollapsingHeader("Grid")) {
         bool a = autoGrid;
         if (ImGui::Checkbox("Automatic resolution", &a)) {
             autoGrid = a;
@@ -270,7 +280,7 @@ void App::drawPanel() {
     }
 
     // ---- Controls ----
-    if (ImGui::CollapsingHeader("Controls", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::CollapsingHeader("Controls")) {
         const char* lines[] = {
             "Drag the light handle      move the light",
             "Drag on empty canvas       draw a wall",

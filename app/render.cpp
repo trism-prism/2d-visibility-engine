@@ -222,7 +222,10 @@ void drawCanvas(ImDrawList* dl, const App& app) {
         for (std::uint32_t k = r.wallBegin; k < r.wallEnd; ++k) tested[app.trace.walls[k]] = 1;
     }
     dl->AddRect(wmin, wmax, IM_COL32(128, 138, 164, 255), 0.0f, 0, 2.0f * ui);
-    const float wallW = (scene.userWallCount() > 400 ? 1.5f : 2.2f) * ui;  // thinner in dense scenes
+    // Thickness follows the world->screen scale (1-2 px) and is thinner still in dense scenes.
+    float wallPx = std::clamp(3.0f * app.view.scale, 1.0f, 2.0f);
+    if (scene.userWallCount() > 400) wallPx = std::max(1.0f, wallPx * 0.75f);
+    const float wallW = wallPx * ui;
     for (std::size_t i = vis::Scene::kBoundaryWalls; i < walls.size(); ++i) {
         ImU32 col = kWall;
         float w = wallW;
@@ -241,18 +244,31 @@ void drawCanvas(ImDrawList* dl, const App& app) {
         const vis::Trace::RayRecord& r = app.trace.rays[static_cast<std::size_t>(app.probeRay)];
         const double tFar = std::max(std::isfinite(r.tMinus) ? r.tMinus : 0.0, std::isfinite(r.tPlus) ? r.tPlus : 0.0);
         dl->AddLine(lp, app.view.toScreen(app.light + r.dir * (tFar > 0 ? tFar : 1.0)), IM_COL32(94, 196, 255, 230), 1.6f * ui);
-        const auto marker = [&](double t, ImU32 col, const char* label) {
+        // Labels sit off to the side of the ray (perpendicular), on a dark backing so they stay
+        // readable over walls and shadows.
+        ImVec2 dirPx = app.view.toScreen(app.light + r.dir) - lp;
+        const float dl2 = std::hypot(dirPx.x, dirPx.y);
+        const ImVec2 perp = dl2 > 0 ? ImVec2{-dirPx.y / dl2, dirPx.x / dl2} : ImVec2{0, -1};
+        const auto marker = [&](double t, ImU32 col, const char* name, float side) {
             if (!std::isfinite(t)) return;
             const ImVec2 p = app.view.toScreen(app.light + r.dir * t);
             dl->AddCircleFilled(p, 4.5f * ui, col, 14);
             dl->AddCircle(p, 6.5f * ui, IM_COL32(255, 255, 255, 200), 14, 1.2f);
-            dl->AddText({p.x + 8 * ui, p.y - 16 * ui}, col, label);
+            char label[64];
+            std::snprintf(label, sizeof label, "%s = %.3f", name, t);
+            const ImVec2 sz = ImGui::CalcTextSize(label);
+            ImVec2 at = p + perp * (side * (18.0f * ui)) ;
+            if (side < 0) at.x -= sz.x * (perp.x > 0 ? 1.0f : 0.0f);
+            else at.x -= sz.x * (perp.x < 0 ? 1.0f : 0.0f);
+            at.y -= sz.y * 0.5f;
+            dl->AddRectFilled({at.x - 4, at.y - 2}, {at.x + sz.x + 4, at.y + sz.y + 2}, IM_COL32(10, 12, 18, 225), 3.0f);
+            dl->AddText(at, col, label);
         };
         if (r.tMinus == r.tPlus) {
-            marker(r.tMinus, IM_COL32(255, 230, 120, 255), "tMinus = tPlus");
+            marker(r.tMinus, IM_COL32(255, 230, 120, 255), "tMinus = tPlus", 1.0f);
         } else {
-            marker(r.tMinus, IM_COL32(120, 255, 170, 255), "tMinus");
-            marker(r.tPlus, IM_COL32(255, 130, 220, 255), "tPlus");
+            marker(r.tMinus, IM_COL32(120, 255, 170, 255), "tMinus", -1.0f);
+            marker(r.tPlus, IM_COL32(255, 130, 220, 255), "tPlus", 1.0f);
         }
     }
 

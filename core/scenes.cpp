@@ -1,5 +1,7 @@
 #include "scenes.h"
 
+#include "visibility.h"
+
 #include <algorithm>
 #include <cmath>
 #include <deque>
@@ -196,17 +198,28 @@ Scene makeMazeScene(int wallCount, std::uint64_t seed) {
         const int line = vertical ? r.x0 + 1 + c.rng.below(w - 1) : r.y0 + 1 + c.rng.below(h - 1);
         const int from = vertical ? r.y0 : r.x0;
         const int to = vertical ? r.y1 : r.x1;
-        const int door = (to - from) >= 2 ? from + c.rng.below(to - from) : -1;
+        const int len = to - from;
         const auto piece = [&](int i0, int i1) {
             if (i1 <= i0 || static_cast<int>(c.walls.size()) >= lattice) return;
             if (vertical) c.add({xl(line), yl(i0)}, {xl(line), yl(i1)});
             else c.add({xl(i0), yl(line)}, {xl(i1), yl(line)});
         };
-        if (door < 0) {
-            piece(from, to);
-        } else {
-            piece(from, door);
-            piece(door + 1, to);
+        // Several doors per wall (1 to 4 by length, many two cells wide) so rooms connect widely and
+        // the light sees through the maze instead of down single-cell corridors. Every wall keeps
+        // at least one door, so the lattice stays connected; a one-cell wall gets none.
+        std::vector<char> isDoor(static_cast<std::size_t>(std::max(len, 0)), 0);
+        const int doors = len >= 14 ? 4 : len >= 8 ? 3 : len >= 4 ? 2 : len >= 2 ? 1 : 0;
+        for (int d = 0; d < doors; ++d) {
+            const int pos = c.rng.below(len);
+            isDoor[static_cast<std::size_t>(pos)] = 1;
+            if (len >= 4 && pos + 1 < len && c.rng.below(5) < 3) isDoor[static_cast<std::size_t>(pos + 1)] = 1;
+        }
+        for (int i = 0; i < len;) {
+            if (isDoor[static_cast<std::size_t>(i)]) { ++i; continue; }
+            int j = i;
+            while (j < len && !isDoor[static_cast<std::size_t>(j)]) ++j;
+            piece(from + i, from + j);
+            i = j;
         }
         if (vertical) {
             queue.push_back({r.x0, r.y0, line, r.y1});
@@ -276,6 +289,48 @@ Scene makeScene(SceneKind kind, int wallCount, std::uint64_t seed) {
         case SceneKind::Cluster: return makeClusterScene(wallCount, seed);
     }
     return Scene(kStressWidth, kStressHeight);
+}
+
+}  // namespace vis
+
+namespace vis {
+
+namespace {
+double distToWall(Vec2 p, const Segment& s) {
+    const Vec2 e = s.b - s.a;
+    const double l2 = dot(e, e);
+    double t = l2 > 0.0 ? dot(p - s.a, e) / l2 : 0.0;
+    t = std::clamp(t, 0.0, 1.0);
+    return length(p - (s.a + e * t));
+}
+double polygonArea(const std::vector<Vec2>& poly) {
+    double a = 0.0;
+    for (std::size_t i = 0; i < poly.size(); ++i) a += cross(poly[i], poly[(i + 1) % poly.size()]);
+    return 0.5 * a;
+}
+}  // namespace
+
+Vec2 chooseLight(const Scene& scene, Vec2 preferred) {
+    std::vector<Vec2> candidates{preferred};
+    for (int dy = -3; dy <= 3; ++dy)
+        for (int dx = -3; dx <= 3; ++dx) candidates.push_back({preferred.x + 70.0 * dx, preferred.y + 70.0 * dy});
+    VisibilityResult r;
+    Vec2 best = preferred;
+    double bestArea = -1.0;
+    for (const Vec2 p : candidates) {
+        if (p.x < 0 || p.y < 0 || p.x > scene.width() || p.y > scene.height()) continue;
+        bool open = true;
+        for (std::size_t i = Scene::kBoundaryWalls; i < scene.walls().size() && open; ++i)
+            open = distToWall(p, scene.walls()[i]) >= 8.0;
+        if (!open) continue;
+        computeVisibility(scene, p, Mode::Grid, r);
+        const double area = polygonArea(r.polygon);
+        if (area > bestArea) {
+            bestArea = area;
+            best = p;
+        }
+    }
+    return best;
 }
 
 }  // namespace vis
