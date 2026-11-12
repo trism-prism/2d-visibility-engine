@@ -1,10 +1,13 @@
-// Milestone 1 smoke app: demo scene, filled visibility polygon, draggable light, tiny stats panel.
-//   vis_app                               interactive window
-//   vis_app --capture out.bmp [--frames N]  render N frames (default 3), save the framebuffer, exit 0
+// Interactive 2D visibility / lighting application (GLFW + Dear ImGui + OpenGL3).
+//   vis_app [--size WxH] [--scene demo|scatter|maze|long|cluster] [--walls N] [--seed S]
+//           [--mode brute|grid] [--overlay off|grid|probe|rays] [--light x,y] [--compare]
+//           [--capture file.bmp [--frames N]] [--script file]
+// Capture and script runs use a hidden window and no vsync.
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -13,36 +16,70 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
+#include "app.h"
 #include "bmp.h"
-#include "render.h"
-#include "scenes.h"
-#include "visibility.h"
+#include "script.h"
 
 namespace {
 
 struct Options {
-    std::string capturePath;  // empty: interactive
+    int width = 1280, height = 800;
+    vis::SceneKind scene = vis::SceneKind::Demo;
+    int walls = 1000, seed = 1;
+    vis::Mode mode = vis::Mode::Grid;
+    Overlay overlay = Overlay::Off;
+    bool hasLight = false;
+    double lightX = 0, lightY = 0;
+    bool compare = false;
+    std::string capturePath, scriptPath;
     int frames = 3;
 };
 
-bool parseArgs(int argc, char** argv, Options& opt) {
+bool parseArgs(int argc, char** argv, Options& o) {
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
-        if (a == "--capture" && i + 1 < argc) {
-            opt.capturePath = argv[++i];
-        } else if (a == "--frames" && i + 1 < argc) {
-            opt.frames = std::max(1, std::atoi(argv[++i]));
-        } else {
-            std::fprintf(stderr, "usage: vis_app [--capture <file.bmp> [--frames N]]\n");
-            return false;
-        }
+        const auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : std::string(); };
+        if (a == "--size") {
+            if (std::sscanf(next().c_str(), "%dx%d", &o.width, &o.height) != 2) return false;
+        } else if (a == "--scene") {
+            const std::string s = next();
+            if (s == "demo") o.scene = vis::SceneKind::Demo;
+            else if (s == "scatter") o.scene = vis::SceneKind::Scatter;
+            else if (s == "maze") o.scene = vis::SceneKind::Maze;
+            else if (s == "long") o.scene = vis::SceneKind::LongWalls;
+            else if (s == "cluster") o.scene = vis::SceneKind::Cluster;
+            else return false;
+        } else if (a == "--walls") o.walls = std::clamp(std::atoi(next().c_str()), 100, 5000);
+        else if (a == "--seed") o.seed = std::max(0, std::atoi(next().c_str()));
+        else if (a == "--mode") {
+            const std::string s = next();
+            if (s == "brute") o.mode = vis::Mode::Brute;
+            else if (s == "grid") o.mode = vis::Mode::Grid;
+            else return false;
+        } else if (a == "--overlay") {
+            const std::string s = next();
+            if (s == "off") o.overlay = Overlay::Off;
+            else if (s == "grid") o.overlay = Overlay::Grid;
+            else if (s == "probe") o.overlay = Overlay::Probe;
+            else if (s == "rays") o.overlay = Overlay::Rays;
+            else return false;
+        } else if (a == "--light") {
+            if (std::sscanf(next().c_str(), "%lf,%lf", &o.lightX, &o.lightY) != 2) return false;
+            o.hasLight = true;
+        } else if (a == "--compare") o.compare = true;
+        else if (a == "--capture") o.capturePath = next();
+        else if (a == "--frames") o.frames = std::max(1, std::atoi(next().c_str()));
+        else if (a == "--script") o.scriptPath = next();
+        else return false;
     }
+    o.width = std::clamp(o.width, 400, 7680);
+    o.height = std::clamp(o.height, 300, 4320);
     return true;
 }
 
 void onGlfwError(int code, const char* message) { std::fprintf(stderr, "GLFW error %d: %s\n", code, message); }
 
-// Reads the (resolved) back buffer and writes it as BMP; prints how much of it differs from the clear colour.
+// Reads the resolved back buffer of the frame just rendered and writes a 24-bit BMP.
 bool captureFramebuffer(GLFWwindow* window, const std::string& path) {
     int w = 0, h = 0;
     glfwGetFramebufferSize(window, &w, &h);
@@ -58,15 +95,14 @@ bool captureFramebuffer(GLFWwindow* window, const std::string& path) {
         std::fprintf(stderr, "capture: glReadPixels failed\n");
         return false;
     }
-    std::size_t differing = 0;
-    for (std::size_t i = 0; i < rgb.size(); i += 3)
-        if (std::memcmp(&rgb[i], &rgb[0], 3) != 0) ++differing;
-    std::printf("captured %dx%d, %zu of %zu pixels differ from the corner pixel\n", w, h, differing,
-                static_cast<std::size_t>(w) * static_cast<std::size_t>(h));
+    const std::filesystem::path p(path);
+    if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
     if (!writeBmp24(path, w, h, rgb)) {
         std::fprintf(stderr, "capture: cannot write %s\n", path.c_str());
         return false;
     }
+    std::printf("captured %s (%dx%d)\n", path.c_str(), w, h);
+    std::fflush(stdout);
     return true;
 }
 
@@ -74,79 +110,96 @@ bool captureFramebuffer(GLFWwindow* window, const std::string& path) {
 
 int main(int argc, char** argv) {
     Options opt;
-    if (!parseArgs(argc, argv, opt)) return 2;
-    const bool capture = !opt.capturePath.empty();
+    if (!parseArgs(argc, argv, opt)) {
+        std::fprintf(stderr,
+                     "usage: vis_app [--size WxH] [--scene demo|scatter|maze|long|cluster] [--walls N] [--seed S]\n"
+                     "               [--mode brute|grid] [--overlay off|grid|probe|rays] [--light x,y] [--compare]\n"
+                     "               [--capture file.bmp [--frames N]] [--script file]\n");
+        return 2;
+    }
+    const bool headless = !opt.capturePath.empty() || !opt.scriptPath.empty();
 
     glfwSetErrorCallback(onGlfwError);
     if (!glfwInit()) return 1;
     glfwWindowHint(GLFW_SAMPLES, 4);
-    glfwWindowHint(GLFW_VISIBLE, capture ? GLFW_FALSE : GLFW_TRUE);
-    GLFWwindow* window = glfwCreateWindow(1280, 800, "2D Visibility & Lighting Engine", nullptr, nullptr);
+    glfwWindowHint(GLFW_VISIBLE, headless ? GLFW_FALSE : GLFW_TRUE);
+    GLFWwindow* window = glfwCreateWindow(opt.width, opt.height, "2D Visibility & Lighting Engine", nullptr, nullptr);
     if (!window) {
         glfwTerminate();
         return 1;
     }
+    glfwSetWindowSizeLimits(window, 900, 600, GLFW_DONT_CARE, GLFW_DONT_CARE);
     glfwMakeContextCurrent(window);
-    glfwSwapInterval(capture ? 0 : 1);
+    glfwSwapInterval(headless ? 0 : 1);
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGui::GetIO().IniFilename = nullptr;  // no imgui.ini written into the working directory
-    ImGui::StyleColorsDark();
+    ImGuiIO& io = ImGui::GetIO();
+    io.IniFilename = nullptr;  // no imgui.ini in the working directory
+    float sx = 1.0f, sy = 1.0f;
+    glfwGetWindowContentScale(window, &sx, &sy);
+    App app;
+    setupUi(app, headless ? 1.0f : std::max(sx, 1.0f));
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 130");
 
-    vis::Scene scene = vis::makeDemoScene();
-    vis::Vec2 light = vis::demoLight();
-    vis::VisibilityResult result;
+    app.vsync = !headless;
+    app.stressWalls = opt.walls;
+    app.seed = opt.seed;
+    app.mode = opt.mode;
+    app.overlay = opt.overlay;
+    app.compare = opt.compare;
+    app.loadScene(opt.scene);
+    if (opt.hasLight) app.setLight({opt.lightX, opt.lightY});
+    app.status.clear();
+
+    Script script;
+    const bool scripted = !opt.scriptPath.empty();
+    if (scripted && !script.load(opt.scriptPath)) {
+        std::fprintf(stderr, "cannot read script %s\n", opt.scriptPath.c_str());
+        return 2;
+    }
+
     int exitCode = 0;
     int frame = 0;
-
-    while (!glfwWindowShouldClose(window)) {
+    while (!glfwWindowShouldClose(window) && !app.wantQuit) {
         glfwPollEvents();
+        if (scripted && !script.tick(app, io)) app.wantQuit = true;
+
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-        ImGuiIO& io = ImGui::GetIO();
-
-        const View view = fitView(scene, io.DisplaySize, 24.0f);
-        if (!capture && ImGui::IsMouseDown(ImGuiMouseButton_Left) && !io.WantCaptureMouse) {
-            light = view.toWorld(io.MousePos);
-        }
-
-        vis::computeVisibility(scene, light, vis::Mode::Grid, result);
-        drawWorld(ImGui::GetBackgroundDrawList(), view, scene, result);
-
-        ImGui::SetNextWindowPos(ImVec2(12, 12), ImGuiCond_Always);
-        ImGui::SetNextWindowBgAlpha(0.7f);
-        ImGui::Begin("stats", nullptr,
-                     ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove |
-                         ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoSavedSettings);
-        ImGui::Text("frame  %.2f ms (%.0f fps)", static_cast<double>(io.DeltaTime) * 1000.0, static_cast<double>(io.Framerate));
-        ImGui::Text("query  %.1f us (sort %.1f, cast %.1f)", result.stats.totalUs, result.stats.sortUs, result.stats.castUs);
-        ImGui::Text("rays %llu, wall tests %llu, cells %llu, vertices %zu",
-                    static_cast<unsigned long long>(result.stats.raysCast),
-                    static_cast<unsigned long long>(result.stats.wallTests),
-                    static_cast<unsigned long long>(result.stats.cellsVisited), result.stats.outputVertices);
-        ImGui::Text("walls %zu, targets %zu  (drag to move the light)", scene.userWallCount(), scene.targets().size());
-        ImGui::End();
-
+        app.frame(io, ImGui::GetTime());
+        drawCanvas(ImGui::GetBackgroundDrawList(), app);
+        app.drawPanel();
+        app.drawStatusLine();
         ImGui::Render();
+
         int fbw = 0, fbh = 0;
         glfwGetFramebufferSize(window, &fbw, &fbh);
         glViewport(0, 0, fbw, fbh);
-        glClearColor(0.055f, 0.06f, 0.075f, 1.0f);
+        glClearColor(0.047f, 0.051f, 0.067f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         ++frame;
-        if (capture && frame >= opt.frames) {
+        if (!script.pendingCapture.empty()) {
+            if (!captureFramebuffer(window, script.pendingCapture)) exitCode = 1;
+            script.pendingCapture.clear();
+        }
+        if (!opt.capturePath.empty() && !scripted && frame >= opt.frames) {
             if (!captureFramebuffer(window, opt.capturePath)) exitCode = 1;
             break;
         }
         glfwSwapBuffers(window);
     }
 
+    if (scripted && script.failures > 0) {
+        std::printf("SCRIPT FAILED: %d failing expectation(s)\n", script.failures);
+        exitCode = 1;
+    } else if (scripted) {
+        std::printf("script ok\n");
+    }
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();

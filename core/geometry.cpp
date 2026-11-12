@@ -98,7 +98,17 @@ void rayHit(const Ray& ray, const Segment& s, double& tMinus, double& tPlus) {
     if (sa != 0 && sb != 0) {
         // Proper crossing: counts for both sides.
         const Vec2 e = s.b - s.a;
-        const double t = cross(qa, e) / cross(d, e);
+        double t = cross(qa, e) / cross(d, e);
+        if (!std::isfinite(t)) {
+            // Exactly on opposite sides, but so nearly parallel that the rounded denominator (or the
+            // quotient) is zero/non-finite. Dropping the hit would let light through a wall, so
+            // interpolate along the wall using the rounded side distances instead.
+            const double fa = std::fabs(cross(d, qa));
+            const double fb = std::fabs(cross(d, qb));
+            const double u = (fa + fb) > 0.0 ? fa / (fa + fb) : 0.5;
+            const Vec2 hit = s.a + e * u;
+            t = dot(hit - ray.o, d) / dot(d, d);
+        }
         if (t * ray.len > kLightClearance) {
             tMinus = std::min(tMinus, t);
             tPlus = std::min(tPlus, t);
@@ -138,6 +148,9 @@ SegHit intersectSegments(const Segment& s, const Segment& t, Vec2& p) {
     const double k = cross(t.a - s.a, u) / cross(r, u);
     p = s.a + r * k;
     // Exactly crossing but so close to parallel that the rounded cross(r,u) vanished: no usable point.
+    // Returning None is safe here, unlike in rayHit: the endpoints of both walls are targets already,
+    // and between them the walls are nearly collinear, so the missing crossing target can only
+    // misplace a polygon vertex by a sliver bounded by the rounding of the crossing position.
     if (!isFinite(p)) return SegHit::None;
     return SegHit::Cross;
 }

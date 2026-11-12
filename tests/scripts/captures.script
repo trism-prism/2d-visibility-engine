@@ -1,0 +1,25 @@
+# Produces the review captures under build/captures (run from the project root).
+wait 3
+capture build/captures/demo_default.bmp
+set overlay probe
+wmove 1100 300
+wait 3
+capture build/captures/demo_probe_grid.bmp
+set mode brute
+wait 3
+capture build/captures/demo_probe_baseline.bmp
+set mode grid
+set overlay grid
+key 1
+wait 5
+capture build/captures/stress_scatter_grid.bmp
+key 2
+wait 5
+capture build/captures/stress_maze_grid.bmp
+key 3
+wait 5
+capture build/captures/stress_long_grid.bmp
+key 4
+wait 5
+capture build/captures/stress_cluster_grid.bmp
+quit

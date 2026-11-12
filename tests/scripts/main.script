@@ -1,0 +1,171 @@
+# Interaction test, replayed through ImGui's input queue (see app/script.h).
+# Window 1280x800, demo scene: 55 user walls, light at (610, 290).
+wait 3
+log
+expect scene == demo
+expect mode == grid
+expect walls == 55
+expect light_x == 610
+expect light_y == 290
+
+# --- drag the light: press on the handle, move, release
+save lx light_x
+save poly0 poly_hash
+wmove 610 290
+down left
+wmove 700 400
+wmove 750 520
+up left
+wait 2
+log
+expect light_x != $lx
+# the injected mouse position arrives pixel-rounded, so allow about a pixel (1 px = 1.8 world units)
+expect light_x > 747.5
+expect light_x < 752.5
+expect light_y > 517.5
+expect light_y < 522.5
+expect walls == 55
+expect poly_hash != $poly0
+
+# --- draw a wall: wall count +1 and the polygon changes
+save poly1 poly_hash
+wmove 900 560
+down left
+wmove 900 630
+wmove 900 700
+up left
+wait 2
+log
+expect walls == 56
+expect poly_hash != $poly1
+expect status has Wall added
+
+# --- zero-length wall (press and release without moving) is rejected
+wmove 1300 600
+down left
+up left
+wait 2
+log
+expect walls == 56
+expect status has rejected
+
+# --- right-click deletes the wall just drawn
+wmove 900 630
+down right
+up right
+wait 2
+log
+expect walls == 55
+expect status has Wall deleted
+
+# --- right-click on a boundary wall: nothing is deleted, the status line says so
+wmove 800 0
+down right
+up right
+wait 2
+log
+expect walls == 55
+expect status has Boundary walls cannot be deleted
+
+# --- clicking on the panel (empty area and a button) must not create a wall
+save poly2 poly_hash
+move 1150 745
+down left
+up left
+wait 2
+expect walls == 55
+expect drawing == no
+move @Reset demo
+down left
+up left
+wait 2
+log
+expect status has Demo scene loaded
+expect walls == 55
+expect light_x == 610
+
+# --- a drag that starts on the canvas draws a wall even if it ends over the panel
+wmove 1000 900
+down left
+move 1200 500
+wait 2
+expect drawing == yes
+key Escape
+expect drawing == no
+up left
+wait 2
+expect walls == 55
+
+# --- Tab switches mode; the scene and the light are untouched; outputs identical
+set compare on
+wait 3
+save v0 vertices
+save lx0 light_x
+save h0 poly_hash
+log
+expect identical == yes
+key Tab
+log
+expect mode == brute
+expect identical == yes
+expect vertices == $v0
+expect walls == 55
+expect light_x == $lx0
+expect poly_hash == $h0
+key Tab
+expect mode == grid
+expect identical == yes
+set compare off
+
+# --- overlays: O cycles off -> grid -> probe -> rays -> off
+key O
+expect overlay == grid
+key O
+expect overlay == probe
+wmove 800 300
+wait 3
+log
+expect probe_walls > 0
+expect probe_cells > 0
+key Tab
+wait 3
+log
+expect mode == brute
+expect probe_walls == 59
+key Tab
+key O
+expect overlay == rays
+key O
+expect overlay == off
+
+# --- C clears, R resets
+key C
+expect walls == 0
+key R
+expect walls == 55
+expect light_x == 610
+
+# --- stress scenes via 1-4: at least 1000 walls each
+key 1
+wait 4
+log
+expect scene == scatter
+expect walls >= 1000
+key 2
+wait 4
+log
+expect scene == maze
+expect walls >= 1000
+key 3
+wait 4
+log
+expect scene == longwalls
+expect walls >= 1000
+key 4
+wait 4
+log
+expect scene == cluster
+expect walls >= 1000
+key R
+expect walls == 55
+quit

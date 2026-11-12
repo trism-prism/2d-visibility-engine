@@ -1,46 +1,327 @@
-#include "render.h"
+// Canvas drawing. Everything about the algorithm that is drawn here (cells walked, walls tested, hit
+// points, rays) is read from App::trace, the Grid or the Scene: nothing is recomputed or invented.
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
+#include <vector>
 
-View fitView(const vis::Scene& scene, ImVec2 canvas, float margin) {
-    View v;
-    const float sx = (canvas.x - 2 * margin) / static_cast<float>(scene.width());
-    const float sy = (canvas.y - 2 * margin) / static_cast<float>(scene.height());
-    v.scale = sx < sy ? sx : sy;
-    if (v.scale < 0.01f) v.scale = 0.01f;
-    v.origin = {(canvas.x - static_cast<float>(scene.width()) * v.scale) * 0.5f,
-                (canvas.y - static_cast<float>(scene.height()) * v.scale) * 0.5f};
-    return v;
-}
+#include <imgui_internal.h>  // ImDrawListSharedData: the white-pixel UV for the vertex-coloured mesh
 
-void drawWorld(ImDrawList* dl, const View& view, const vis::Scene& scene, const vis::VisibilityResult& result) {
-    const ImU32 floorCol = IM_COL32(24, 27, 36, 255);
-    const ImU32 litCol = IM_COL32(255, 214, 140, 96);
-    const ImU32 wallCol = IM_COL32(232, 236, 245, 255);
-    const ImU32 frameCol = IM_COL32(96, 104, 128, 255);
+#include "app.h"
 
-    const ImVec2 lo = view.toScreen({0.0, 0.0});
-    const ImVec2 hi = view.toScreen({scene.width(), scene.height()});
-    dl->AddRectFilled(lo, hi, floorCol);
+using vis::Vec2;
 
-    // The fan triangles share edges exactly; with anti-aliased fill on, every triangle would get its
-    // own feathered rim and show seams, so the fill is un-smoothed here (4x MSAA smooths the outline).
-    const ImDrawListFlags saved = dl->Flags;
-    dl->Flags &= ~ImDrawListFlags_AntiAliasedFill;
-    const auto& poly = result.polygon;
-    if (poly.size() >= 3) {
-        const ImVec2 c = view.toScreen(result.light);
-        for (std::size_t i = 0; i < poly.size(); ++i) {
-            dl->AddTriangleFilled(c, view.toScreen(poly[i]), view.toScreen(poly[(i + 1) % poly.size()]), litCol);
+namespace {
+
+constexpr ImU32 kFloor = IM_COL32(21, 24, 33, 255);
+constexpr ImU32 kWall = IM_COL32(226, 231, 244, 255);
+constexpr ImU32 kWallMuted = IM_COL32(120, 128, 150, 150);
+constexpr ImU32 kTested = IM_COL32(255, 168, 64, 255);
+constexpr ImU32 kAccent = IM_COL32(94, 196, 255, 255);
+constexpr ImU32 kDelete = IM_COL32(255, 96, 96, 255);
+
+ImU32 withAlpha(ImU32 c, int a) { return (c & 0x00FFFFFFu) | (static_cast<ImU32>(a) << IM_COL32_A_SHIFT); }
+
+ImVec2 operator+(ImVec2 a, ImVec2 b) { return {a.x + b.x, a.y + b.y}; }
+ImVec2 operator-(ImVec2 a, ImVec2 b) { return {a.x - b.x, a.y - b.y}; }
+ImVec2 operator*(ImVec2 a, float s) { return {a.x * s, a.y * s}; }
+
+// Radial gradient as a ring mesh with per-vertex colours; clipped by the caller's clip rect.
+void drawLightGradient(ImDrawList* dl, ImVec2 c, float rMax) {
+    constexpr int kRings = 28;
+    constexpr int kSegs = 96;
+    const int vtxCount = 1 + kRings * kSegs;
+    const int idxCount = kSegs * 3 + (kRings - 1) * kSegs * 6;
+    dl->PrimReserve(idxCount, vtxCount);
+    const ImVec2 uv = dl->_Data->TexUvWhitePixel;
+    const auto colourAt = [](float t) {  // t = distance / rMax in [0,1]
+        const float fall = std::pow(1.0f - t, 2.4f);
+        const float a = 0.10f + 0.62f * fall;
+        // warm near the light, cooling slightly with distance
+        const float r = 1.0f, g = 0.80f + 0.06f * t, b = 0.52f + 0.30f * t;
+        return ImGui::ColorConvertFloat4ToU32(ImVec4(r, g, b, a * (t >= 1.0f ? 0.0f : 1.0f)));
+    };
+    dl->PrimWriteVtx(c, uv, colourAt(0.0f));
+    for (int i = 1; i <= kRings; ++i) {
+        const float t = static_cast<float>(i) / kRings;
+        // ring radii bunch up near the light where the colour changes fastest
+        const float r = rMax * t * t * 0.0f + rMax * (t * t * 0.55f + t * 0.45f);
+        const ImU32 col = colourAt(t * t * 0.55f + t * 0.45f);
+        for (int s = 0; s < kSegs; ++s) {
+            const float a = 6.28318530718f * static_cast<float>(s) / kSegs;
+            dl->PrimWriteVtx({c.x + std::cos(a) * r, c.y + std::sin(a) * r}, uv, col);
         }
     }
-    dl->Flags = saved;
+    const auto vi = [&](int ring, int s) { return static_cast<ImDrawIdx>(1 + (ring - 1) * kSegs + (s % kSegs)); };
+    const ImDrawIdx base = static_cast<ImDrawIdx>(dl->_VtxCurrentIdx - vtxCount);
+    for (int s = 0; s < kSegs; ++s) {
+        dl->PrimWriteIdx(base);
+        dl->PrimWriteIdx(base + vi(1, s));
+        dl->PrimWriteIdx(base + vi(1, s + 1));
+    }
+    for (int ring = 1; ring < kRings; ++ring)
+        for (int s = 0; s < kSegs; ++s) {
+            dl->PrimWriteIdx(base + vi(ring, s));
+            dl->PrimWriteIdx(base + vi(ring + 1, s));
+            dl->PrimWriteIdx(base + vi(ring + 1, s + 1));
+            dl->PrimWriteIdx(base + vi(ring, s));
+            dl->PrimWriteIdx(base + vi(ring + 1, s + 1));
+            dl->PrimWriteIdx(base + vi(ring, s + 1));
+        }
+}
 
-    dl->AddRect(lo, hi, frameCol, 0.0f, 0, 1.5f);
-    const auto& walls = scene.walls();
-    for (std::size_t i = vis::Scene::kBoundaryWalls; i < walls.size(); ++i) {
-        dl->AddLine(view.toScreen(walls[i].a), view.toScreen(walls[i].b), wallCol, 2.5f);
+void drawShadows(ImDrawList* dl, const App& app, ImVec2 lp, float reach) {
+    const auto& poly = app.result.polygon;
+    const std::size_t n = poly.size();
+    for (std::size_t i = 0; i < n; ++i) {
+        const ImVec2 a = app.view.toScreen(poly[i]);
+        const ImVec2 b = app.view.toScreen(poly[(i + 1) % n]);
+        const ImVec2 ca = a - lp, cb = b - lp;
+        const float la = std::hypot(ca.x, ca.y), lb = std::hypot(cb.x, cb.y);
+        if (la < 1e-3f || lb < 1e-3f) continue;
+        const float cr = ca.x * cb.y - ca.y * cb.x;
+        if (std::fabs(cr) <= 1e-5f * la * lb) continue;  // radial edge: zero-area shadow
+        const ImVec2 pts[4] = {a, b, lp + cb * ((lb + reach) / lb), lp + ca * ((la + reach) / la)};
+        dl->AddConvexPolyFilled(pts, 4, kFloor);
+    }
+}
+
+void cellRect(const App& app, int cx, int cy, ImVec2& lo, ImVec2& hi) {
+    const vis::Grid& g = app.scene.grid();
+    lo = app.view.toScreen({g.xEdge(cx), g.yEdge(cy)});
+    hi = app.view.toScreen({g.xEdge(cx + 1), g.yEdge(cy + 1)});
+}
+
+ImU32 heat(float t) {  // 0 -> transparent blue, 1 -> hot orange
+    t = std::clamp(t, 0.0f, 1.0f);
+    const float r = 0.25f + 0.75f * t, g = 0.35f + 0.35f * (1.0f - std::fabs(t - 0.5f) * 2.0f), b = 0.9f - 0.8f * t;
+    return ImGui::ColorConvertFloat4ToU32(ImVec4(r, g, b, 0.12f + 0.42f * t));
+}
+
+void drawGridLines(ImDrawList* dl, const App& app, int alpha) {
+    const vis::Grid& g = app.scene.grid();
+    const ImVec2 lo = app.view.toScreen({0, 0});
+    const ImVec2 hi = app.view.toScreen({g.width(), g.height()});
+    if (g.cellWidth() * app.view.scale < 4.0f || g.cellHeight() * app.view.scale < 4.0f) return;  // would be a smear
+    const ImU32 col = IM_COL32(150, 170, 210, alpha);
+    for (int i = 0; i <= g.cols(); ++i) {
+        const float x = app.view.toScreen({g.xEdge(i), 0}).x;
+        dl->AddLine({x, lo.y}, {x, hi.y}, col, 1.0f);
+    }
+    for (int j = 0; j <= g.rows(); ++j) {
+        const float y = app.view.toScreen({0, g.yEdge(j)}).y;
+        dl->AddLine({lo.x, y}, {hi.x, y}, col, 1.0f);
+    }
+}
+
+void legend(ImDrawList* dl, const App& app, const char* const* lines, int count) {
+    const float pad = 8.0f * app.uiScale;
+    float w = 0, h = 0;
+    for (int i = 0; i < count; ++i) {
+        const ImVec2 sz = ImGui::CalcTextSize(lines[i]);
+        w = std::max(w, sz.x);
+        h += sz.y + 2;
+    }
+    const ImVec2 lo{app.canvasMin.x + 10 * app.uiScale, app.canvasMax.y - h - 2 * pad - 10 * app.uiScale};
+    dl->AddRectFilled(lo, {lo.x + w + 2 * pad, lo.y + h + 2 * pad}, IM_COL32(12, 14, 20, 215), 4.0f);
+    dl->AddRect(lo, {lo.x + w + 2 * pad, lo.y + h + 2 * pad}, IM_COL32(70, 78, 100, 255), 4.0f);
+    float y = lo.y + pad;
+    for (int i = 0; i < count; ++i) {
+        dl->AddText({lo.x + pad, y}, i == 0 ? IM_COL32(240, 244, 255, 255) : IM_COL32(170, 180, 205, 255), lines[i]);
+        y += ImGui::CalcTextSize(lines[i]).y + 2;
+    }
+}
+
+void drawRays(ImDrawList* dl, const App& app, ImVec2 lp, int alpha) {
+    const ImU32 col = IM_COL32(120, 210, 255, alpha);
+    for (const vis::Trace::RayRecord& r : app.trace.rays) {
+        const bool a = std::isfinite(r.tMinus), b = std::isfinite(r.tPlus);
+        if (a) dl->AddLine(lp, app.view.toScreen(app.light + r.dir * r.tMinus), col, 1.0f);
+        if (b && r.tPlus != r.tMinus) dl->AddLine(lp, app.view.toScreen(app.light + r.dir * r.tPlus), col, 1.0f);
+    }
+}
+
+}  // namespace
+
+void drawCanvas(ImDrawList* dl, const App& app) {
+    const vis::Scene& scene = app.scene;
+    const float ui = app.uiScale;
+    const ImVec2 wmin = app.view.toScreen({0, 0});
+    const ImVec2 wmax = app.view.toScreen({scene.width(), scene.height()});
+    const ImVec2 lp = app.view.toScreen(app.light);
+    const ImDrawListFlags savedFlags = dl->Flags;
+
+    dl->PushClipRect(app.canvasMin, app.canvasMax, true);
+
+    // ---- floor, light, shadows (clipped to the world) ----
+    dl->PushClipRect(wmin, wmax, true);
+    dl->AddRectFilled(wmin, wmax, kFloor);
+    dl->Flags &= ~ImDrawListFlags_AntiAliasedFill;  // shared edges: feathering would show as seams
+    {
+        float rMax = 0;
+        for (Vec2 c : {Vec2{0, 0}, Vec2{scene.width(), 0}, Vec2{0, scene.height()}, Vec2{scene.width(), scene.height()}}) {
+            const ImVec2 p = app.view.toScreen(c);
+            rMax = std::max(rMax, std::hypot(p.x - lp.x, p.y - lp.y));
+        }
+        // Purely cosmetic falloff: it only makes the lit area readable, it is not a physical model.
+        drawLightGradient(dl, lp, std::max(rMax, 10.0f) * 0.8f);
+        drawShadows(dl, app, lp, std::hypot(wmax.x - wmin.x, wmax.y - wmin.y) * 2.0f + 100.0f);
+    }
+    dl->Flags = savedFlags;
+    dl->PopClipRect();
+
+    const bool haveTrace = app.overlay != Overlay::Off && !app.trace.rays.empty();
+    const vis::Grid& grid = scene.grid();
+
+    // ---- overlays that sit under the walls ----
+    if (haveTrace && app.overlay == Overlay::Grid && app.mode == vis::Mode::Grid) {
+        std::uint32_t maxVisits = 1;
+        for (std::uint32_t v : app.trace.cellVisits) maxVisits = std::max(maxVisits, v);
+        if (grid.cellCount() <= 200000) {
+            for (int cy = 0; cy < grid.rows(); ++cy)
+                for (int cx = 0; cx < grid.cols(); ++cx) {
+                    ImVec2 lo, hi;
+                    cellRect(app, cx, cy, lo, hi);
+                    const std::size_t c = grid.cellIndex(cx, cy);
+                    const std::uint32_t v = c < app.trace.cellVisits.size() ? app.trace.cellVisits[c] : 0;
+                    if (v > 0) dl->AddRectFilled(lo, hi, heat(static_cast<float>(v) / static_cast<float>(maxVisits)));
+                    if (!grid.cellWalls(c).empty() && hi.x - lo.x > 8.0f)
+                        dl->AddRectFilled({lo.x + 2, lo.y + 2}, {lo.x + 2 + 3 * ui, lo.y + 2 + 3 * ui}, IM_COL32(190, 200, 225, 170));
+                }
+        }
+        drawGridLines(dl, app, 70);
+    }
+    if (haveTrace && app.overlay == Overlay::Probe && app.mode == vis::Mode::Grid) {
+        drawGridLines(dl, app, 40);
+        if (app.probeRay >= 0) {
+            const vis::Trace::RayRecord& r = app.trace.rays[static_cast<std::size_t>(app.probeRay)];
+            int order = 0;
+            for (std::uint32_t k = r.cellBegin; k < r.cellEnd; ++k, ++order) {
+                const std::uint32_t c = app.trace.cells[k];
+                ImVec2 lo, hi;
+                cellRect(app, static_cast<int>(c % static_cast<std::uint32_t>(grid.cols())),
+                         static_cast<int>(c / static_cast<std::uint32_t>(grid.cols())), lo, hi);
+                dl->AddRectFilled(lo, hi, IM_COL32(94, 196, 255, 46));
+                dl->AddRect(lo, hi, IM_COL32(94, 196, 255, 150));
+                if (hi.x - lo.x >= 22.0f * ui && hi.y - lo.y >= 22.0f * ui) {
+                    char b[16];
+                    std::snprintf(b, sizeof b, "%d", order + 1);
+                    dl->AddText({lo.x + 3, lo.y + 2}, IM_COL32(200, 235, 255, 230), b);
+                }
+            }
+        }
     }
 
-    const ImVec2 lp = view.toScreen(result.light);
-    dl->AddCircleFilled(lp, 9.0f, IM_COL32(255, 196, 80, 90), 24);
-    dl->AddCircleFilled(lp, 5.0f, IM_COL32(255, 244, 214, 255), 20);
+    // ---- walls ----
+    const auto& walls = scene.walls();
+    std::vector<char> tested;
+    const bool probing = haveTrace && app.overlay == Overlay::Probe && app.probeRay >= 0;
+    if (probing) {
+        tested.assign(walls.size(), 0);
+        const vis::Trace::RayRecord& r = app.trace.rays[static_cast<std::size_t>(app.probeRay)];
+        for (std::uint32_t k = r.wallBegin; k < r.wallEnd; ++k) tested[app.trace.walls[k]] = 1;
+    }
+    dl->AddRect(wmin, wmax, IM_COL32(128, 138, 164, 255), 0.0f, 0, 2.0f * ui);
+    const float wallW = (scene.userWallCount() > 400 ? 1.5f : 2.2f) * ui;  // thinner in dense scenes
+    for (std::size_t i = vis::Scene::kBoundaryWalls; i < walls.size(); ++i) {
+        ImU32 col = kWall;
+        float w = wallW;
+        if (probing) {
+            if (tested[i]) { col = kTested; w = wallW * 1.3f; }
+            else col = kWallMuted;
+        }
+        if (static_cast<int>(i) == app.hoverWall) { col = kDelete; w = wallW * 1.8f; }
+        dl->AddLine(app.view.toScreen(walls[i].a), app.view.toScreen(walls[i].b), col, w);
+    }
+
+    // ---- overlays on top of the walls ----
+    if (haveTrace && (app.overlay == Overlay::Rays || (app.overlay == Overlay::Grid && app.mode == vis::Mode::Brute)))
+        drawRays(dl, app, lp, app.overlay == Overlay::Rays ? 90 : 70);
+    if (probing) {
+        const vis::Trace::RayRecord& r = app.trace.rays[static_cast<std::size_t>(app.probeRay)];
+        const double tFar = std::max(std::isfinite(r.tMinus) ? r.tMinus : 0.0, std::isfinite(r.tPlus) ? r.tPlus : 0.0);
+        dl->AddLine(lp, app.view.toScreen(app.light + r.dir * (tFar > 0 ? tFar : 1.0)), IM_COL32(94, 196, 255, 230), 1.6f * ui);
+        const auto marker = [&](double t, ImU32 col, const char* label) {
+            if (!std::isfinite(t)) return;
+            const ImVec2 p = app.view.toScreen(app.light + r.dir * t);
+            dl->AddCircleFilled(p, 4.5f * ui, col, 14);
+            dl->AddCircle(p, 6.5f * ui, IM_COL32(255, 255, 255, 200), 14, 1.2f);
+            dl->AddText({p.x + 8 * ui, p.y - 16 * ui}, col, label);
+        };
+        if (r.tMinus == r.tPlus) {
+            marker(r.tMinus, IM_COL32(255, 230, 120, 255), "tMinus = tPlus");
+        } else {
+            marker(r.tMinus, IM_COL32(120, 255, 170, 255), "tMinus");
+            marker(r.tPlus, IM_COL32(255, 130, 220, 255), "tPlus");
+        }
+    }
+
+    // ---- wall being drawn ----
+    if (app.drawing) {
+        const ImVec2 a = app.view.toScreen(app.drawStart), b = app.view.toScreen(app.drawEnd);
+        dl->AddLine(a, b, withAlpha(kAccent, 230), 2.6f * ui);
+        dl->AddCircleFilled(a, 4.0f * ui, kAccent, 12);
+        dl->AddCircleFilled(b, 4.0f * ui, kAccent, 12);
+    }
+
+    // ---- light handle ----
+    {
+        const float grab = 16.0f * ui;
+        const bool active = app.hoverLight || app.draggingLight;
+        dl->AddCircleFilled(lp, grab, IM_COL32(255, 196, 90, active ? 60 : 28), 28);
+        dl->AddCircle(lp, grab, IM_COL32(255, 214, 140, active ? 255 : 150), 28, active ? 2.0f : 1.2f);
+        dl->AddCircleFilled(lp, 6.0f * ui, IM_COL32(255, 248, 224, 255), 20);
+    }
+
+    if (app.outline && app.result.polygon.size() >= 3) {
+        std::vector<ImVec2> pts;
+        pts.reserve(app.result.polygon.size());
+        for (Vec2 v : app.result.polygon) pts.push_back(app.view.toScreen(v));
+        dl->AddPolyline(pts.data(), static_cast<int>(pts.size()), IM_COL32(94, 196, 255, 190), ImDrawFlags_Closed, 1.2f);
+    }
+
+    // ---- legends ----
+    if (app.overlay == Overlay::Grid) {
+        char l1[96], l2[96];
+        if (app.mode == vis::Mode::Grid) {
+            std::snprintf(l1, sizeof l1, "Tint: rays that walked each cell (max %u)", [&] {
+                std::uint32_t m = 0;
+                for (std::uint32_t v : app.trace.cellVisits) m = std::max(m, v);
+                return m;
+            }());
+            std::snprintf(l2, sizeof l2, "Dots: cells with registered walls. %d x %d cells", grid.cols(), grid.rows());
+            const char* lines[] = {"Overlay: grid cells", l1, l2};
+            legend(dl, app, lines, 3);
+        } else {
+            const char* lines[] = {"Overlay: grid cells", "Baseline mode: no grid walk happens.",
+                                   "Showing the cast rays only; switch to Grid to see cells."};
+            legend(dl, app, lines, 3);
+        }
+    } else if (app.overlay == Overlay::Probe) {
+        if (app.probeRay < 0 || app.trace.rays.empty()) {
+            const char* lines[] = {"Overlay: probe ray", "Move the cursor over the canvas."};
+            legend(dl, app, lines, 2);
+        } else {
+            const vis::Trace::RayRecord& r = app.trace.rays[static_cast<std::size_t>(app.probeRay)];
+            char l1[112], l2[112];
+            if (app.mode == vis::Mode::Grid) {
+                std::snprintf(l1, sizeof l1, "Probe ray: %u cells walked, %u of %zu walls tested", r.cellEnd - r.cellBegin,
+                              r.wallEnd - r.wallBegin, scene.wallCount());
+                std::snprintf(l2, sizeof l2, "Orange: tested walls. Muted: skipped. Cyan cells in visiting order.");
+            } else {
+                std::snprintf(l1, sizeof l1, "Probe ray: Baseline tests all %u of %zu walls", r.wallEnd - r.wallBegin,
+                              scene.wallCount());
+                std::snprintf(l2, sizeof l2, "Orange: every wall is tested. No cells: Baseline has no grid.");
+            }
+            const char* lines[] = {"Overlay: probe ray (nearest the cursor)", l1, l2};
+            legend(dl, app, lines, 3);
+        }
+    } else if (app.overlay == Overlay::Rays) {
+        char l1[96];
+        std::snprintf(l1, sizeof l1, "%zu rays, drawn to their one-sided hits", app.trace.rays.size());
+        const char* lines[] = {"Overlay: all rays", l1};
+        legend(dl, app, lines, 2);
+    }
+
+    dl->PopClipRect();
 }
