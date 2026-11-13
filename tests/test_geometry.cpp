@@ -376,3 +376,103 @@ TEST_CASE("rayHit: nearly end-on wall with a vanishing rounded denominator still
         CHECK(seen);
     }
 }
+
+// Regression: nearly end-on walls where orient() says "strictly opposite sides" but the rounded
+// cross products are noise, so the proper-crossing formula gives a FINITE t outside the interval
+// spanned by the projections of the wall's ends (here t < min(tA, tB): the hit lands in front of the
+// wall). The hit must lie inside that interval. Four bitwise cases found by a seeded search.
+TEST_CASE("rayHit: finite but inconsistent crossing parameter is replaced by an in-segment hit") {
+    struct Case { Vec2 p, a, b; };
+    const Case cases[] = {
+        {{0.72327421661723301, 0.58723440006391181}, {1.1326440796974679, 0.91960635585476569}, {1.4054465392206312, 1.1410977141438781}},
+        {{0.75169669653760562, 1.4083495849074716}, {1.3516711146885347, 2.5324382321637402}, {1.7500792614997454, 3.278880182447411}},
+        {{1.1497533709350876, 1.3893905118065824}, {2.7009637035496525, 3.2639115807886787}, {2.7206581390737714, 3.2877108255174359}},
+        {{0.74658625185269922, 0.7118185636285661}, {1.7497316905052511, 1.668248639162679}, {2.0086346449473527, 1.9150947720680698}},
+    };
+    const Vec2 L{0, 0};
+    for (const Case& c : cases) {
+        const Vec2 d = c.p - L;
+        const double dd = dot(d, d);
+        const double tA = dot(c.a - L, d) / dd, tB = dot(c.b - L, d) / dd;
+        const double lo = std::min(tA, tB), hi = std::max(tA, tB);
+        REQUIRE(orient(L, c.p, c.a) * orient(L, c.p, c.b) == -1);
+        // the plain formula really is inconsistent here
+        const double plain = cross(c.a - L, c.b - c.a) / cross(d, c.b - c.a);
+        REQUIRE(std::isfinite(plain));
+        REQUIRE((plain < lo || plain > hi));
+
+        Hit h;
+        rayHit(makeRay(L, c.p), {c.a, c.b}, h.tMinus, h.tPlus);
+        CHECK(std::isfinite(h.tMinus));
+        CHECK(h.tMinus == h.tPlus);
+        CHECK(h.tMinus >= lo);
+        CHECK(h.tMinus <= hi);
+
+        // through the whole query in both modes: a second wall starts at p, so p is a target
+        Scene s(4, 4);
+        REQUIRE(s.addWall(c.a, c.b) == AddStatus::Added);
+        REQUIRE(s.addWall(c.p, {c.p.x + 0.3, c.p.y - 0.25}) == AddStatus::Added);
+        for (Mode mode : {Mode::Brute, Mode::Grid}) {
+            VisibilityResult r;
+            Trace trace;
+            computeVisibility(s, L, mode, r, &trace);
+            bool seen = false;
+            for (const Trace::RayRecord& ray : trace.rays) {
+                if (ray.target != c.p) continue;
+                seen = true;
+                const double far = std::max(ray.tMinus, ray.tPlus);
+                CHECK(far >= lo);
+                CHECK(far <= hi);
+            }
+            CHECK(seen);
+        }
+    }
+}
+
+TEST_CASE("intersectSegments: nearly parallel crossing never yields a point outside the segments") {
+    struct Case { Segment s, t; };
+    const Case cases[] = {
+        {{{1.4106688103815097, 0.61222107448055307}, {4.7483946109095676, 3.1299286608820385}},
+         {{2.2621314677147573, 1.2544949220106072}, {3.4273786948561789, 2.1334622066638609}}},   // m < 0
+        {{{1.2828865194246355, 0.9866816177894453}, {3.8605184164757222, 3.8168386199583435}},
+         {{1.7506950826998404, 1.5003203893078185}, {2.9388637064436165, 2.804891361638234}}},    // m > 1
+        {{{0.7360058927874642, 0.90465511666394405}, {3.4934133175185913, 3.3929247076754558}},
+         {{1.4776491144264321, 1.5739099606281071}, {2.480748947849432, 2.4791018411854551}}},    // k, m not finite
+    };
+    for (const Case& c : cases) {
+        REQUIRE(orient(c.s.a, c.s.b, c.t.a) * orient(c.s.a, c.s.b, c.t.b) == -1);
+        REQUIRE(orient(c.t.a, c.t.b, c.s.a) * orient(c.t.a, c.t.b, c.s.b) == -1);
+        Vec2 p;
+        REQUIRE(intersectSegments(c.s, c.t, p) == SegHit::Cross);
+        CHECK(isFinite(p));
+        const double slack = 1e-12;  // rounding of the interpolation itself
+        CHECK(p.x >= std::min(c.t.a.x, c.t.b.x) - slack);
+        CHECK(p.x <= std::max(c.t.a.x, c.t.b.x) + slack);
+        CHECK(p.y >= std::min(c.t.a.y, c.t.b.y) - slack);
+        CHECK(p.y <= std::max(c.t.a.y, c.t.b.y) + slack);
+    }
+}
+
+TEST_CASE("Scene::addWall rejects coordinates of huge magnitude") {
+    Scene s(100, 80);
+    CHECK(s.addWall({1e200, 5}, {5, 5}) == AddStatus::RejectedTooLarge);
+    CHECK(s.addWall({5, 5}, {5, -1.7e308}) == AddStatus::RejectedTooLarge);
+    CHECK(s.addWall({-1e151, 0}, {50, 50}) == AddStatus::RejectedTooLarge);
+    CHECK(s.wallCount() == 4);
+    // at the limit the wall is clipped normally
+    CHECK(s.addWall({-1e150, 40}, {1e150, 40}) == AddStatus::Added);
+    CHECK(s.walls().back() == Segment{{0, 40}, {100, 40}});
+}
+
+TEST_CASE("makeSceneWalls + one setWalls equals makeScene (the app's single-rebuild load path)") {
+    for (SceneKind k : {SceneKind::Demo, SceneKind::Scatter, SceneKind::Maze, SceneKind::LongWalls, SceneKind::Cluster}) {
+        Scene s(kStressWidth, kStressHeight);
+        s.setGridResolution(7, 5);  // a manual resolution set before the single load survives it
+        const std::uint64_t before = s.revision();
+        s.setWalls(makeSceneWalls(k, 300, 7));
+        CHECK(s.revision() == before + 1);  // exactly one rebuild
+        CHECK(s.grid().cols() == 7);
+        CHECK(s.grid().rows() == 5);
+        CHECK(s.walls() == makeScene(k, 300, 7).walls());
+    }
+}

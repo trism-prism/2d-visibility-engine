@@ -1,4 +1,4 @@
-date: 2026-11-12 18:09:26 -0500
+date: 2026-11-12 19:08:59 -0500
 compiler: MSVC _MSC_FULL_VER 194435230
 build_type: Release
 flags: /DWIN32 /D_WINDOWS /EHsc /O2 /Ob2 /DNDEBUG ; viscore adds /fp:precise

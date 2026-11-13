@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <vector>
 
 #include "geometry.h"
 #include "scene.h"
@@ -40,6 +41,9 @@ Scene makeMazeScene(int wallCount, std::uint64_t seed);       // lattice rooms w
 Scene makeLongWallsScene(int wallCount, std::uint64_t seed);  // two near-parallel long families: grid-hostile
 Scene makeClusterScene(int wallCount, std::uint64_t seed);    // everything inside a few cells: grid-hostile
 Scene makeScene(SceneKind kind, int wallCount, std::uint64_t seed);  // Demo ignores the arguments
+// The raw wall list of a scene (before Scene's insertion rules), for callers that want to control
+// the grid resolution before the single rebuild in Scene::setWalls.
+std::vector<Segment> makeSceneWalls(SceneKind kind, int wallCount, std::uint64_t seed);
 
 // Deterministic light placement for a loaded scene: among a 7 x 7 lattice of candidates (spacing 70)
 // around `preferred`, those inside the world and at least 8 units from every user wall, the one whose

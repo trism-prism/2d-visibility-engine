@@ -215,3 +215,85 @@ TEST_CASE("angleLess: half-turn split, direction along +x first and -x last") {
     CHECK_FALSE(angleLess(l, {9, 5}, {6, 5}));
     CHECK(angleLess(l, {6, 5}, {4, 5}));    // opposite directions are in different half-turns
 }
+
+namespace {
+
+// double = M * 2^E with an odd (or zero) integer M
+void decompose(double x, long long& M, int& E) {
+    if (x == 0.0) { M = 0; E = 0; return; }
+    int ex = 0;
+    const double f = std::frexp(x, &ex);  // x = f * 2^ex, 0.5 <= |f| < 1
+    M = static_cast<long long>(std::ldexp(f, 53));
+    E = ex - 53;
+    while ((M & 1) == 0) { M /= 2; ++E; }
+}
+
+// Exact orientation of six doubles via integers scaled to the smallest exponent. Returns 2 if the
+// scaled values do not fit in 61 bits, so the caller skips the sample.
+int exactOrientDoubles(Vec2 a, Vec2 b, Vec2 c) {
+    const double v[6] = {a.x, a.y, b.x, b.y, c.x, c.y};
+    long long M[6];
+    int E[6];
+    int emin = 1 << 30;
+    for (int i = 0; i < 6; ++i) {
+        decompose(v[i], M[i], E[i]);
+        if (M[i] != 0) emin = std::min(emin, E[i]);
+    }
+    long long S[6];
+    for (int i = 0; i < 6; ++i) {
+        if (M[i] == 0) { S[i] = 0; continue; }
+        const int shift = E[i] - emin;
+        if (shift >= 61 || std::llabs(M[i]) >= (1ll << (61 - shift))) return 2;
+        S[i] = M[i] * (1ll << shift);
+    }
+    const long long A[2] = {S[0], S[1]}, B[2] = {S[2], S[3]}, C[2] = {S[4], S[5]};
+    return refOrient(A, B, C);
+}
+
+}  // namespace
+
+TEST_CASE("orient: mixed exponents so that b-a and c-a round (the low terms of the expansion), exact reference") {
+    // Three kinds of samples, all with a different exponent per coordinate so that the floating-point
+    // differences b-a and c-a round (their low parts are what the expansion must recover):
+    //   0: m * 2^e with |m| < 2^26 and e in [0,30]: a 56-bit span between coordinates;
+    //   1: exactly collinear points lambda * (p, q) through the origin, lambda1 = 2^[30,36] against small
+    //      integers, p, q < 2^23;
+    //   2: small values (|m| < 2^12, e in [0,6]) with a 1-ulp perturbation (a full 53-bit mantissa).
+    // The reference decomposes each double into odd integer * 2^E, scales all six to the smallest E and
+    // multiplies with exact 128-bit arithmetic; samples whose scaled values need more than 61 bits are
+    // skipped.
+    Rng rng(0xBEEF);
+    long long checked = 0, inexact = 0, zeros = 0;
+    for (int i = 0; i < scaled(300000); ++i) {
+        double v[6];
+        const int kind = i % 3;
+        for (int k = 0; k < 6; ++k) {
+            const int bits = kind == 2 ? 12 : 26, maxE = kind == 2 ? 6 : 30;
+            const long long m = static_cast<long long>(rng.next() % (1ull << (bits + 1))) - (1ll << bits);
+            v[k] = std::ldexp(static_cast<double>(m), rng.below(maxE + 1));
+        }
+        if (kind == 1) {
+            const double p = static_cast<double>(rng.below((1 << 23) - 1) + 1), q = static_cast<double>(rng.below((1 << 23) - 1) + 1);
+            const double l1 = std::ldexp(1.0, 30 + rng.below(7)), l2 = static_cast<double>(rng.below(64) + 1),
+                         l3 = static_cast<double>(rng.below(64) + 1);
+            v[0] = p * l1; v[1] = q * l1;
+            v[2] = p * l2; v[3] = q * l2;
+            v[4] = p * l3; v[5] = q * l3;
+        }
+        if (kind == 2) {
+            const int k = rng.below(6);
+            v[k] = std::nextafter(v[k], rng.below(2) ? 1e300 : -1e300);
+        }
+        const Vec2 a{v[0], v[1]}, b{v[2], v[3]}, c{v[4], v[5]};
+        const int expect = exactOrientDoubles(a, b, c);
+        if (expect == 2) continue;
+        ++checked;
+        zeros += expect == 0;
+        const double dx = b.x - a.x, dy = c.y - a.y;
+        inexact += ((dx + a.x) != b.x) || ((dy + a.y) != c.y);
+        if (orient(a, b, c) != expect) FAIL_CHECK("mixed-exponent mismatch at " << i << " kind " << kind << " expected " << expect);
+    }
+    CHECK(checked > scaled(100000));
+    CHECK(inexact > checked / 10);  // the differences really do round in a good share of the samples
+    CHECK(zeros > checked / 20);    // and exact zeros occur (collinear construction)
+}

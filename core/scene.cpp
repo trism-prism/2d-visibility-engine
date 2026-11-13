@@ -25,6 +25,8 @@ Scene::Scene(double width, double height) : w_(width), h_(height) {
 
 AddStatus Scene::sanitizeWall(Vec2 a, Vec2 b, double w, double h, Segment& out) {
     if (!isFinite(a) || !isFinite(b)) return AddStatus::RejectedNonFinite;
+    for (double v : {a.x, a.y, b.x, b.y})
+        if (std::fabs(v) > kMaxCoordinate) return AddStatus::RejectedTooLarge;
     Segment clipped;
     if (!clipToRect({a, b}, w, h, clipped)) return AddStatus::RejectedOutside;
     if (length(clipped.b - clipped.a) < kMinWallLength) return AddStatus::RejectedTooShort;

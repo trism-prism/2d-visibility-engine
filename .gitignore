@@ -10,3 +10,4 @@ out/
 *.suo
 CMakeUserPresets.json
 imgui.ini
+!docs/images/*.png

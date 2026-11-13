@@ -9,7 +9,9 @@
 //     row is not written and the program exits non-zero;
 //   * timing: steady_clock around the loop of computeVisibility calls only, one sample = one pass over
 //     the positions, reported per query; warm-up passes first; execution order alternates between
-//     samples; a checksum of the outputs is accumulated and printed;
+//     samples; the polygon size and wall-test count of every timed query are accumulated into a sink
+//     that is printed at the end (so the queries cannot be optimised away), and the CSV column
+//     `checksum` is the vertex checksum of the gate pass;
 //   * Brute can be very slow on big scenes: a per-row time budget reduces its samples (minimum 3) and,
 //     if one pass alone is too long, the number of positions (both modes then use the same subset).
 //     The positions and sample counts actually used are recorded in the CSV.
@@ -58,12 +60,10 @@ double median(std::vector<double> v) {
     const std::size_t n = v.size();
     return n % 2 ? v[n / 2] : 0.5 * (v[n / 2 - 1] + v[n / 2]);
 }
-double p95(std::vector<double> v) {  // nearest rank
-    if (v.empty()) return 0.0;
-    std::sort(v.begin(), v.end());
-    const std::size_t rank = static_cast<std::size_t>(std::ceil(0.95 * static_cast<double>(v.size())));
-    return v[std::max<std::size_t>(rank, 1) - 1];
-}
+// With at most 15 samples a nearest-rank 95th percentile is the maximum, so the maximum and the
+// minimum are reported instead.
+double minOf(const std::vector<double>& v) { return v.empty() ? 0.0 : *std::min_element(v.begin(), v.end()); }
+double maxOf(const std::vector<double>& v) { return v.empty() ? 0.0 : *std::max_element(v.begin(), v.end()); }
 
 std::vector<Vec2> lightPath(const Scene& s, int count) {
     std::vector<Vec2> path;
@@ -183,8 +183,8 @@ Meta makeMeta(const Config& cfg) {
 const char* kHeader =
     "kind,n_requested,walls_inserted,seed,grid_scale,cols,rows,registrations,max_walls_per_cell,k,T,"
     "positions_used,positions_total,brute_samples,grid_samples,rays_mean,vertices_mean,"
-    "brute_med_us,brute_p95_us,brute_sort_med_us,brute_cast_med_us,brute_tests_mean,"
-    "grid_med_us,grid_p95_us,grid_sort_med_us,grid_cast_med_us,grid_tests_mean,grid_cells_mean,"
+    "brute_med_us,brute_min_us,brute_max_us,brute_sort_med_us,brute_cast_med_us,brute_tests_mean,"
+    "grid_med_us,grid_min_us,grid_max_us,grid_sort_med_us,grid_cast_med_us,grid_tests_mean,grid_cells_mean,"
     "speedup_total,speedup_cast,rebuild_grid_med_us,rebuild_isect_med_us,addremove_pair_med_us,checksum";
 
 struct Writer {
@@ -205,15 +205,27 @@ bool measureRow(Scene& scene, SceneKind kind, int nRequested, int seed, const st
     const std::vector<Vec2> path = lightPath(scene, cfg.positions);
     VisibilityResult rb, rg;
 
-    // Pick the positions: Brute governs how many fit in the budget.
-    computeVisibility(scene, path[0], Mode::Brute, rb);  // cold run, discarded
-    auto t0 = Clock::now();
-    computeVisibility(scene, path[0], Mode::Brute, rb);
-    const double tBrute = seconds(t0, Clock::now());
-    computeVisibility(scene, path[0], Mode::Grid, rg);
-    t0 = Clock::now();
-    computeVisibility(scene, path[0], Mode::Grid, rg);
-    const double tGrid = seconds(t0, Clock::now());
+    // Pick the positions: Brute governs how many fit in the budget. The per-query time is estimated
+    // from up to five queries spread along the path (the first one also warms the caches); when a
+    // single Brute query already exceeds a third of the budget the remaining probes are skipped,
+    // because only one position will be used anyway.
+    double tBrute = 0, tGrid = 0;
+    int probes = 0;
+    for (int pi = 0; pi < 5; ++pi) {
+        const std::size_t idx = static_cast<std::size_t>(pi * cfg.positions / 5);
+        auto t0 = Clock::now();
+        computeVisibility(scene, path[idx], Mode::Brute, rb);
+        const double b = seconds(t0, Clock::now());
+        t0 = Clock::now();
+        computeVisibility(scene, path[idx], Mode::Grid, rg);
+        const double g = seconds(t0, Clock::now());
+        tBrute += b;
+        tGrid += g;
+        ++probes;
+        if (b > cfg.budget / 3.0) break;
+    }
+    tBrute /= probes;
+    tGrid /= probes;
     int m = static_cast<int>(std::clamp(cfg.budget / (3.0 * std::max(tBrute, 1e-9)), 1.0, static_cast<double>(cfg.positions)));
     std::vector<int> subset;
     for (int i = 0; i < m; ++i) subset.push_back(static_cast<int>(static_cast<long long>(i) * cfg.positions / m));
@@ -285,11 +297,11 @@ bool measureRow(Scene& scene, SceneKind kind, int nRequested, int seed, const st
     char line[2048];
     std::snprintf(line, sizeof line,
                   "%s,%d,%zu,%d,%s,%d,%d,%zu,%zu,%zu,%zu,%zu,%d,%zu,%zu,%.1f,%.1f,"
-                  "%.2f,%.2f,%.2f,%.2f,%.1f,%.2f,%.2f,%.2f,%.2f,%.1f,%.1f,%.2f,%.2f,%.1f,%.1f,%.1f,%.6g",
+                  "%.2f,%.2f,%.2f,%.2f,%.2f,%.1f,%.2f,%.2f,%.2f,%.2f,%.2f,%.1f,%.1f,%.2f,%.2f,%.1f,%.1f,%.1f,%.6g",
                   sceneKindName(kind), nRequested, scene.userWallCount(), seed, scaleLabel.c_str(), g.cols(), g.rows(),
                   g.registrations(), maxCell, scene.intersections().size(), scene.targets().size(), subset.size(),
-                  cfg.positions, bt.size(), gt.size(), lastG.rays, lastG.vertices, bm, p95(bt), median(bs), bcm, lastB.tests,
-                  gm, p95(gt), median(gs), gcm, lastG.tests, lastG.cells, gm > 0 ? bm / gm : 0.0, gcm > 0 ? bcm / gcm : 0.0,
+                  cfg.positions, bt.size(), gt.size(), lastG.rays, lastG.vertices, bm, minOf(bt), maxOf(bt), median(bs), bcm, lastB.tests,
+                  gm, minOf(gt), maxOf(gt), median(gs), gcm, lastG.tests, lastG.cells, gm > 0 ? bm / gm : 0.0, gcm > 0 ? bcm / gcm : 0.0,
                   median(rebuildGrid), median(rebuildIsect), median(pair), checksum);
     out.f << line << "\n";
     out.f.flush();

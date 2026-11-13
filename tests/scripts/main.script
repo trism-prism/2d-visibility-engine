@@ -67,6 +67,24 @@ log
 expect walls == 55
 expect status has Boundary walls cannot be deleted
 
+# --- a user wall on the world edge (within a fraction of a pixel of the boundary wall) is deletable:
+# user walls are picked before the boundary wall next to them. (Injected mouse positions arrive
+# truncated to whole pixels, so an exact tie with the boundary cannot be produced through the script.)
+wmove 1 380
+down left
+wmove 1 560
+up left
+wait 2
+expect walls == 56
+wmove 1 470
+wait 2
+down right
+up right
+wait 2
+log
+expect walls == 55
+expect status has Wall deleted
+
 # --- clicking on the panel (empty area and a button) must not create a wall
 save poly2 poly_hash
 move 1150 745
@@ -137,6 +155,53 @@ key O
 expect overlay == rays
 key O
 expect overlay == off
+
+# --- probe overlay stays valid across scene changes in the frame the ray is picked
+# (a stale probe index used to be possible after C / R / stress loads / mode switches)
+set overlay probe
+wmove 800 300
+wait 3
+expect probe_cells >= 0
+expect probe_walls >= 1
+key C
+wait 2
+expect walls == 0
+expect probe_walls >= 1
+key R
+wait 2
+expect walls == 55
+expect probe_cells >= 0
+key 1
+wait 2
+expect scene == scatter
+expect probe_walls >= 1
+key 2
+wait 2
+expect scene == maze
+expect probe_cells >= 0
+key Tab
+wait 2
+expect mode == brute
+expect probe_walls == 1004
+key 3
+wait 2
+expect scene == longwalls
+expect probe_walls == 1004
+key 4
+wait 2
+expect scene == cluster
+expect probe_walls == 1004
+key C
+wait 2
+expect probe_walls == 4
+key Tab
+wait 2
+expect mode == grid
+key R
+wait 2
+expect walls == 55
+set overlay off
+wait 2
 
 # --- C clears, R resets
 key C

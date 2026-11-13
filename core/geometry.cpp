@@ -98,16 +98,21 @@ void rayHit(const Ray& ray, const Segment& s, double& tMinus, double& tPlus) {
     if (sa != 0 && sb != 0) {
         // Proper crossing: counts for both sides.
         const Vec2 e = s.b - s.a;
+        const double dd = dot(d, d);
         double t = cross(qa, e) / cross(d, e);
-        if (!std::isfinite(t)) {
-            // Exactly on opposite sides, but so nearly parallel that the rounded denominator (or the
-            // quotient) is zero/non-finite. Dropping the hit would let light through a wall, so
-            // interpolate along the wall using the rounded side distances instead.
+        // The crossing lies on the wall, so its parameter along the ray lies between those of the
+        // wall's ends. For a nearly end-on wall cross(d, e) and cross(qa, e) are rounding noise and t
+        // can be non-finite, negative or huge; any of those would skip the wall (light leak) or pass
+        // over it. Then interpolate along the wall with the rounded side distances, which always lands
+        // inside the wall.
+        const double tA = dot(qa, d) / dd;
+        const double tB = dot(qb, d) / dd;
+        if (!(std::isfinite(t) && t >= std::min(tA, tB) && t <= std::max(tA, tB))) {
             const double fa = std::fabs(cross(d, qa));
             const double fb = std::fabs(cross(d, qb));
             const double u = (fa + fb) > 0.0 ? fa / (fa + fb) : 0.5;
             const Vec2 hit = s.a + e * u;
-            t = dot(hit - ray.o, d) / dot(d, d);
+            t = dot(hit - ray.o, d) / dd;
         }
         if (t * ray.len > kLightClearance) {
             tMinus = std::min(tMinus, t);
@@ -145,13 +150,21 @@ SegHit intersectSegments(const Segment& s, const Segment& t, Vec2& p) {
     if (o3 == 0) { p = s.a; return SegHit::Touch; }
     if (o4 == 0) { p = s.b; return SegHit::Touch; }
 
-    const double k = cross(t.a - s.a, u) / cross(r, u);
-    p = s.a + r * k;
-    // Exactly crossing but so close to parallel that the rounded cross(r,u) vanished: no usable point.
-    // Returning None is safe here, unlike in rayHit: the endpoints of both walls are targets already,
-    // and between them the walls are nearly collinear, so the missing crossing target can only
-    // misplace a polygon vertex by a sliver bounded by the rounding of the crossing position.
-    if (!isFinite(p)) return SegHit::None;
+    // Parameters of the crossing along s (k) and along t (m); both must be in [0, 1]. For nearly
+    // parallel segments the rounded cross products are noise and the parameters can be non-finite or
+    // outside [0, 1]; then use the point of t interpolated from the rounded distances of its ends to
+    // s's line, which lies inside t and (up to rounding) on s.
+    const double den = cross(r, u);
+    const double k = cross(t.a - s.a, u) / den;
+    const double m = cross(t.a - s.a, r) / den;
+    if (std::isfinite(k) && std::isfinite(m) && k >= 0.0 && k <= 1.0 && m >= 0.0 && m <= 1.0) {
+        p = s.a + r * k;
+    } else {
+        const double fa = std::fabs(cross(r, t.a - s.a));
+        const double fb = std::fabs(cross(r, t.b - s.a));
+        const double w = (fa + fb) > 0.0 ? fa / (fa + fb) : 0.5;
+        p = t.a + u * w;
+    }
     return SegHit::Cross;
 }
 

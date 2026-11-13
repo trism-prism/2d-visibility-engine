@@ -141,14 +141,14 @@ void App::drawPanel() {
         }
         ImGui::Checkbox("Outline visibility polygon", &outline);
         if (overlay == Overlay::Probe) {
-            if (probeRay >= 0 && probeRay < static_cast<int>(trace.rays.size())) {
-                const vis::Trace::RayRecord& r = trace.rays[static_cast<std::size_t>(probeRay)];
+            if (const vis::Trace::RayRecord* pr = probe()) {
+                const vis::Trace::RayRecord& r = *pr;
                 if (ImGui::BeginTable("probe", 2)) {
                     ImGui::TableSetupColumn("k", ImGuiTableColumnFlags_WidthStretch, 1.1f);
                     ImGui::TableSetupColumn("v", ImGuiTableColumnFlags_WidthStretch, 1.0f);
                     std::snprintf(b, sizeof b, "%u", r.cellEnd - r.cellBegin);
                     kv(*this, "Cells walked", b);
-                    std::snprintf(b, sizeof b, "%u of %zu", r.wallEnd - r.wallBegin, scene.wallCount());
+                    std::snprintf(b, sizeof b, "%zu of %zu", probeWalls(r), scene.wallCount());
                     kv(*this, "Walls tested", b);
                     std::snprintf(b, sizeof b, "%.4f", r.tMinus);
                     kv(*this, "tMinus", b, "limit of the nearest hit from the clockwise side (units of the ray vector)");
@@ -244,7 +244,7 @@ void App::drawPanel() {
             ImGui::TextUnformatted("Outputs identical: ");
             ImGui::SameLine();
             ImGui::TextColored(ok ? ImVec4(0.45f, 0.9f, 0.55f, 1) : ImVec4(1, 0.4f, 0.4f, 1), ok ? "yes" : "NO");
-            sectionNote("Runs both back ends every frame: frame time is higher while enabled.");
+            sectionNote("Runs both back ends on every query (not every frame): the work per query is higher while enabled.");
         }
     }
 

@@ -71,6 +71,7 @@ struct App {
     vis::VisibilityResult traceResult;  // untimed pass that fills `trace`
     vis::Trace trace;
     bool haveOther = false;
+    bool compareFlip = false;  // alternates which mode runs first in Compare
     bool identical = true;
     ModeStats stats[2];  // indexed by static_cast<int>(vis::Mode)
     double frameMs = 16.0;  // exponential moving average
@@ -117,6 +118,9 @@ struct App {
     // ---- per frame ----
     void layout(ImVec2 display);                // panel / canvas rectangles and the world view
     void handleInput(ImGuiIO& io);              // canvas mouse + keys, honouring ImGui capture
+    void updateProbe(const ImGuiIO& io);         // after updateVisibility: picks the ray from the drawn trace
+    const vis::Trace::RayRecord* probe() const;  // the probe ray, or nullptr if none / not valid for this trace
+    std::size_t probeWalls(const vis::Trace::RayRecord& r) const;  // walls tested by that ray
     void updateVisibility();                    // timed query (+ compare, + untimed trace)
     void frame(ImGuiIO& io, double time);       // layout, input, visibility; call after NewFrame
     void drawPanel();                           // ui.cpp

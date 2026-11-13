@@ -13,7 +13,8 @@ enum class AddStatus {
     Added,
     RejectedNonFinite,
     RejectedOutside,   // entirely outside the world rectangle
-    RejectedTooShort   // clipped length < kMinWallLength (includes zero-length input)
+    RejectedTooShort,  // clipped length < kMinWallLength (includes zero-length input)
+    RejectedTooLarge   // a coordinate has magnitude > kMaxCoordinate
 };
 
 // Counts and timings of the most recent rebuild of the derived data.
