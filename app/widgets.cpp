@@ -60,39 +60,39 @@ std::string fmtMs(double us) {
 
 namespace gloss {
 const char* const ray =
-    "A line from the light through a wall end or crossing. Its nearest hits are corners of the lit area.";
+    "A line from the light through a wall end or crossing. Where it hits becomes a corner of the lit area.";
 const char* const target =
-    "A wall end or crossing. One ray per target; same-direction targets share one.";
+    "A wall end or crossing. Each gets a ray; ones in the same direction share.";
 const char* const crossing =
     "Where two walls cross. The lit area can change shape there.";
 const char* const wallTest =
     "One ray checked against one wall. The meter counts these.";
 const char* const square =
-    "One grid square. It lists the walls touching it; a ray tests only the walls listed in its squares.";
+    "One square of the grid. It lists the walls touching it, and a ray only checks those.";
 const char* const outlinePoints =
-    "Corner points of the lit area's outline (the visibility polygon).";
+    "The corners of the lit area's outline (the visibility polygon).";
 const char* const sortCast =
-    "Sort: order targets by angle. Cast: send each ray, find its hits, build the outline.";
+    "Sort: put targets in angle order. Cast: shoot each ray and build the outline.";
 const char* const editCost =
-    "Each edit rebuilds the grid, crossings and targets. Paid once per edit.";
+    "Adding or removing a wall rebuilds the grid, crossings and targets. You pay once per edit.";
 const char* const compare =
-    "Runs both methods each update and checks the outlines match. Doubles the work.";
+    "Runs both methods every update and checks the results match. Doubles the work.";
 const char* const frame =
-    "Whole frame including drawing, smoothed. Capped by vsync.";
+    "Time for a whole frame, drawing included. Capped by vsync.";
 const char* const query =
-    "Median of the last 60 timed updates (sort + cast). Excludes drawing, overlay and the meter's extra pass.";
-const char* const walls = "Room walls plus the 4 outer walls.";
-const char* const cellsWalked = "Squares passed through, summed over rays. 0 for All walls.";
-const char* const registrations = "Total of wall listings: each wall is listed in every square it touches.";
+    "Median of the last 60 updates (sort + cast). Leaves out drawing, overlays and the meter's extra pass.";
+const char* const walls = "Your walls plus the 4 outer ones.";
+const char* const cellsWalked = "Squares the rays passed through, added up. Always 0 for All walls.";
+const char* const registrations = "Every wall is listed in each square it touches. This is the total of those listings.";
 const char* const tMinus =
-    "Distance along the ray (1 = the target) to the nearest wall, clockwise side.";
-const char* const tPlus = "Same, counter-clockwise side.";
+    "How far along the ray (1 = the target) the nearest wall is, going clockwise.";
+const char* const tPlus = "Same, going counter-clockwise.";
 const char* const meter =
-    "One check = one ray against one wall. All walls: rays × walls (exact). Grid: measured at this light "
-    "position. Bars share one scale.";
-const char* const baseline = "Baseline: every ray tests every wall.";
+    "One check = one ray against one wall. All walls: rays × walls, exactly. Grid: counted at this light "
+    "spot. Both bars share a scale.";
+const char* const baseline = "Baseline: every ray checks every wall.";
 const char* const grid =
-    "Grid: a ray tests only walls in the squares it passes through.";
+    "Grid: a ray only checks walls in the squares it passes.";
 }  // namespace gloss
 
 // ---------------------------------------------------------------------------------------------

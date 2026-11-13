@@ -39,10 +39,10 @@ void explainerCard(App& app) {
         ImGui::PopStyleVar();
     }
     cardText(IM_COL32(204, 212, 230, 255),
-             "Bright = what the light sees. Updates live.");
+             "Bright is lit, dark is shadow. Updates live.");
     {
         FontScope f(app, 12.0f);
-        cardText(kTextDim, "Drag the light \u00B7 drag the floor to draw \u00B7 right-click to erase");
+        cardText(kTextDim, "Drag the light. Drag the floor to draw. Right-click to erase.");
     }
     cardEnd(app);
 }
@@ -50,7 +50,7 @@ void explainerCard(App& app) {
 void methodCard(App& app) {
     cardBegin(app, nullptr);
     const char* titles[] = {"All walls", "Grid"};
-    const char* subs[] = {"Baseline: every ray, every wall.", "Each ray tests nearby walls only."};
+    const char* subs[] = {"Baseline: checks every wall.", "Checks only nearby walls."};
     const ImU32 accents[] = {kAmber, kCyan};
     const int clicked = methodCards(app, titles, subs, accents, 2, app.mode == vis::Mode::Brute ? 0 : 1);
     if (clicked >= 0) app.setMode(clicked == 0 ? vis::Mode::Brute : vis::Mode::Grid);
@@ -87,7 +87,7 @@ void scenesCard(App& app) {
     ImGui::SetNextItemWidth(cardWidth() - capW - valW - 2.0f * sp);
     if (ImGui::SliderInt("##walls", &idx, 0, kWallStopCount - 1, " ", ImGuiSliderFlags_NoInput)) app.stressWalls = kWallStops[idx];
     const bool slid = ImGui::IsItemDeactivatedAfterEdit();
-    tooltip("Walls in generated scenes (100-5,000). Release to rebuild.");
+    tooltip("How many walls to generate (100-5,000). Let go to rebuild.");
     if (slid && app.kind != vis::SceneKind::Demo) app.loadScene(app.kind);
 
     ImGui::SameLine();
@@ -95,7 +95,7 @@ void scenesCard(App& app) {
     ImGui::TextUnformatted(fmtInt(static_cast<std::uint64_t>(app.stressWalls)).c_str());
     const float half = (cardWidth() - sp) * 0.5f;
     if (button(app, "Clear", {half, 0})) app.clearWalls();
-    tooltip("Remove all walls. Key: C");
+    tooltip("Wipe all walls. Key: C");
     ImGui::SameLine();
     if (button(app, "Reset", {half, 0})) app.resetDemo();
     tooltip("Back to the demo. Key: R");
@@ -103,7 +103,7 @@ void scenesCard(App& app) {
     if (app.detail == Detail::Engine) {
         ImGui::AlignTextToFramePadding();
         ImGui::TextUnformatted("Seed");
-        tooltip("Same count + seed = same scene.");
+        tooltip("Same count and seed give the same scene.");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(cardWidth() * 0.4f);
         if (ImGui::InputInt("##seed", &app.seed, 0)) app.seed = std::max(app.seed, 0);

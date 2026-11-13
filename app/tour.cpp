@@ -21,22 +21,22 @@ struct TourStep {
 
 const TourStep kSteps[kTourSteps] = {
     {"Move the light",
-     "Drag the light. The bright area is what it sees.",
+     "Drag the light around. The bright area follows it.",
      vis::SceneKind::Demo, false, vis::Mode::Grid, Overlay::Off},
     {"Draw walls",
-     "Drag on the floor to draw. Right-click a wall to erase.",
+     "Drag on the floor to draw. Right-click a wall to erase it.",
      vis::SceneKind::Demo, false, vis::Mode::Grid, Overlay::Off},
     {"One ray",
-     "Hover to pick a ray. Orange walls are the only ones it tested.",
+     "Hover to pick a ray. Orange walls are the ones it checked.",
      vis::SceneKind::Demo, false, vis::Mode::Grid, Overlay::Probe},
     {"All walls",
-     "Same ray, now testing every wall. Same picture, more work.",
+     "Now it checks every wall. Same picture, more work.",
      vis::SceneKind::Demo, false, vis::Mode::Brute, Overlay::Probe},
     {"More walls",
-     "1,000 walls. The meter shows the grid doing a fraction of the work.",
+     "1,000 walls. Watch the meter: Grid does a fraction of the work.",
      vis::SceneKind::Scatter, true, vis::Mode::Grid, Overlay::Off},
     {"Worst case",
-     "Walls packed in one corner. The grid helps less. Explore.",
+     "Everything bunched in one corner. Grid helps less. Poke around.",
      vis::SceneKind::Cluster, true, vis::Mode::Grid, Overlay::Off},
 };
 

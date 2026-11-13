@@ -1,27 +1,31 @@
 # Benchmark
 
-This document describes `vis_bench`, the headless benchmark in `bench/main.cpp`, and the results committed in `bench/results/`. Every number below is read from `bench/results/results.csv`, `bench/results/grid_sweep.csv` or `bench/results/results.meta.txt` (the run time also from the console log of that run). The architecture and the algorithms are described in [ARCHITECTURE.md](ARCHITECTURE.md).
+This is about `vis_bench`, the headless benchmark in `bench/main.cpp`, and the results committed in `bench/results/`. Every number here comes from `bench/results/results.csv`, `bench/results/grid_sweep.csv` or `bench/results/results.meta.txt`. The run time also comes from the console log of that run. For the algorithms themselves, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
-> **Note (2026-11-13).** The angular sort in `core/visibility.cpp` was sped up after these results were produced: it now caches each target's difference from the light and applies the same floating-point filter as `orient` before falling back to it, so the output is bitwise identical. A throwaway harness (not this benchmark) showed the sort about 30% faster and the total query about 20-30% faster on Scatter and Maze at n=1000. `bench/results/*` and every number in this document were **not** regenerated and predate that change; the sort times and the sort share of the Grid time below are therefore higher than the current code would give, and the full benchmark has not been rerun.
+> **Note (2026-11-13).** The angular sort in `core/visibility.cpp` got faster after these results were produced. It now caches each target's difference from the light and applies the same floating-point filter as `orient` before falling back to it, so the output is bitwise identical. A throwaway harness (not this benchmark) showed the sort about 30% faster and the total query about 20-30% faster on Scatter and Maze at n=1000.
+>
+> `bench/results/*` and every number in this document were **not** regenerated. They predate that change, so the sort times and the sort share of the Grid time below are higher than the current code would give. The full benchmark has not been rerun.
 
 Terms used here:
 
-- **Baseline / Brute**: the mode where every ray tests every wall (`Mode::Brute`).
-- **Grid**: the mode where each ray walks a uniform grid and tests only the walls registered in the cells it visits (`Mode::Grid`).
-- **n**: number of user walls requested from a scene generator (the four boundary walls come on top).
-- **k**: number of proper wall-wall crossings. **T**: number of targets (wall endpoints plus crossing points, de-duplicated). One ray is cast per target direction (collinear targets share a ray), so T bounds the rays per query.
+- **Baseline / Brute**: every ray tests every wall (`Mode::Brute`).
+- **Grid**: each ray walks a uniform grid and tests only the walls registered in the cells it visits (`Mode::Grid`).
+- **n**: the number of user walls requested from a scene generator. The four boundary walls come on top.
+- **k**: the number of proper wall-wall crossings.
+- **T**: the number of targets (wall endpoints plus crossing points, de-duplicated). One ray is cast per target direction, and collinear targets share a ray, so T is an upper bound on rays per query.
 - **Query**: one call of `computeVisibility` for one light position.
-- **Wall test**: one call of `rayHit`. **Cells walked**: grid cells visited by the ray walks of one query.
+- **Wall test**: one call of `rayHit`.
+- **Cells walked**: grid cells visited by the ray walks of one query.
 
 ## What is measured, and what is not
 
-Measured, per row (one scene layout, n, seed):
+Per row (one scene layout, n, seed), the benchmark records:
 
-- the time of `computeVisibility` for each mode, split into the sort part and the cast part as reported by `VisibilityStats::sortUs` and `castUs`;
-- counters from the same calls (wall tests, cells walked, rays, output vertices);
-- the cost of rebuilding the scene's derived data (`RebuildStats::gridBuildUs`, `intersectUs`) and of one `addWall` followed by `removeWall`.
+- The time of `computeVisibility` for each mode, split into the sort part and the cast part (`VisibilityStats::sortUs` and `castUs`).
+- Counters from the same calls: wall tests, cells walked, rays, output vertices.
+- The cost of rebuilding the scene's derived data (`RebuildStats::gridBuildUs`, `intersectUs`), and of one `addWall` followed by `removeWall`.
 
-Not measured: scene generation, file output, rendering, the overlay trace pass, the GUI. Queries run on one thread; the benchmark starts no other threads.
+Not measured: scene generation, file output, rendering, the overlay trace pass, the GUI. Queries run on one thread, and the benchmark starts no other threads.
 
 ## Reproduce
 
@@ -33,7 +37,17 @@ From the repository root, in PowerShell:
 .\build\release\bench\vis_bench.exe --out bench\results\results.csv
 ```
 
-The full run took 1340 s on the machine below (console line `done in 1340.1 s`; the log, `build/bench_full.log`, is not committed). The command writes three files next to `--out`: `results.csv`, `grid_sweep.csv` and `results.meta.txt`. Options: `--quick` (small matrix, 16 positions, 3 samples; used by the CTest `bench_quick`, label `bench`), `--budget SECONDS` (default 10), `--samples N` (default 15). `vis_bench` links `viscore` only, so it also builds with `-DVIS_BUILD_APP=OFF`.
+The full run took 1340 s on the machine below (console line `done in 1340.1 s`). The log, `build/bench_full.log`, is not committed.
+
+The command writes three files next to `--out`: `results.csv`, `grid_sweep.csv` and `results.meta.txt`.
+
+Options:
+
+- `--quick`: small matrix, 16 positions, 3 samples. The CTest `bench_quick` (label `bench`) uses it.
+- `--budget SECONDS`: default 10.
+- `--samples N`: default 15.
+
+`vis_bench` links `viscore` only, so it also builds with `-DVIS_BUILD_APP=OFF`.
 
 ## Environment
 
@@ -53,24 +67,40 @@ From `bench/results/results.meta.txt`:
 | Time budget per mode and row | 10 s |
 | World | 1600x1000 |
 
-The machine was not otherwise loaded as far as could be seen, but power and thermal state were not controlled or recorded (see Limitations).
+As far as anyone could see, the machine wasn't otherwise loaded. Power and thermal state were not controlled or recorded (see Limitations).
 
 ## Method
 
-1. **Frozen inputs.** Each scene is built once per (layout, n, seed) with the generators in `core/scenes.cpp` (`makeScene`). The light path is 64 positions on a closed curve, `x = W(0.5 + 0.42 sin(2*pi*3t + 0.6))`, `y = H(0.5 + 0.42 sin(2*pi*2t))`, `t = i/64`, computed once (`lightPath` in `bench/main.cpp`). Both modes use the same positions in the same order.
-2. **Correctness gate.** Before any timing, Brute and Grid are run at every position that will be timed and the two polygons must be equal with `==` on every `double`. On a mismatch the program prints kind, n, seed, position and light, writes nothing for that row and exits with status 1. The gate passed on every row of the committed results (the run completed with all 66 main rows and 10 sweep rows written).
-3. **Timing.** `std::chrono::steady_clock` around a loop of `computeVisibility` calls over the positions (one *sample* is one pass over the positions). The reported per-query time is the pass time divided by the number of positions. Sort and cast times are the means of `sortUs`/`castUs` over the pass. Reported: the median, the minimum and the maximum over the samples. (With at most 15 samples a nearest-rank 95th percentile is the maximum, so the maximum is reported under its own name.)
-4. **Warm-up.** The sizing queries (step 7) and the gate pass warm both modes; one more warm-up pass is run when a pass is cheap (under a tenth of the budget).
-5. **Order.** Samples alternate Brute-then-Grid and Grid-then-Brute.
-6. **Output use.** The polygon size and wall-test count of every timed query are accumulated into a sink printed at the end of the run (`output checksum sink`), so the queries cannot be removed by the optimizer. The CSV column `checksum` is a vertex checksum of the gate pass.
-7. **Budget.** Brute can take seconds per query on large scenes. The per-query time of each mode is estimated from up to five queries spread along the path (if the first Brute query already exceeds a third of the budget, only that one is used). The number of positions `m` is `clamp(budget / (3 * Brute query time), 1, 64)`, and both modes then use the same `m` evenly spaced positions. The number of samples per mode is `clamp(budget / (m * query time), 3, 15)`. The CSV records `positions_used`, `brute_samples` and `grid_samples`.
-8. **Edit costs.** `setWalls` with the same wall list is repeated (up to 15 times, fewer when slow) and the median of `RebuildStats` is taken; then `addWall` of a short wall at the world centre followed by `removeWall` of it is timed as a pair, the same number of times. Each of these runs a full rebuild.
+1. **Frozen inputs.** Each scene is built once per (layout, n, seed) with the generators in `core/scenes.cpp` (`makeScene`). The light path is 64 positions on a closed curve, computed once (`lightPath` in `bench/main.cpp`):
+   - `x = W(0.5 + 0.42 sin(2*pi*3t + 0.6))`
+   - `y = H(0.5 + 0.42 sin(2*pi*2t))`
+   - `t = i/64`
 
-Where the reduction applied (rows with fewer than 64 positions or fewer than 15 samples): see the last columns of the main table. Rows with a single position: Cluster n=4000, Long walls n=2000, Long walls n=4000 (all three seeds each). On those rows the medians describe one light position, not the path.
+   Both modes use the same positions in the same order.
+2. **Correctness gate.** Before any timing, Brute and Grid run at every position that will be timed. The two polygons must be equal with `==` on every `double`. On a mismatch the program prints kind, n, seed, position and light, writes nothing for that row and exits with status 1. The gate passed on every row of the committed results (the run finished with all 66 main rows and 10 sweep rows written).
+3. **Timing.** `std::chrono::steady_clock` around a loop of `computeVisibility` calls over the positions. One *sample* is one pass over the positions. The per-query time is the pass time divided by the number of positions. Sort and cast times are the means of `sortUs`/`castUs` over the pass. Reported: median, minimum and maximum over the samples. With at most 15 samples, a nearest-rank 95th percentile is just the maximum, so the maximum is reported under its own name.
+4. **Warm-up.** The sizing queries (step 7) and the gate pass warm both modes. One more warm-up pass runs when a pass is cheap (under a tenth of the budget).
+5. **Order.** Samples alternate Brute-then-Grid and Grid-then-Brute.
+6. **Output use.** The polygon size and wall-test count of every timed query go into a sink that's printed at the end of the run (`output checksum sink`). That stops the optimizer from removing the queries. The CSV column `checksum` is a vertex checksum of the gate pass.
+7. **Budget.** Brute can take seconds per query on large scenes, so the run sizes itself:
+   - Each mode's per-query time is estimated from up to five queries spread along the path. If the first Brute query already exceeds a third of the budget, only that one is used.
+   - The number of positions `m` is `clamp(budget / (3 * Brute query time), 1, 64)`. Both modes then use the same `m` evenly spaced positions.
+   - The number of samples per mode is `clamp(budget / (m * query time), 3, 15)`.
+   - The CSV records `positions_used`, `brute_samples` and `grid_samples`.
+8. **Edit costs.** `setWalls` with the same wall list is repeated (up to 15 times, fewer when slow) and the median of `RebuildStats` is taken. Then `addWall` of a short wall at the world centre followed by `removeWall` of it is timed as a pair, the same number of times. Each of these runs a full rebuild.
+
+The last columns of the main table show where the budget cut positions or samples (rows with fewer than 64 positions or fewer than 15 samples).
+
+Rows with a single position: Cluster n=4000, Long walls n=2000, Long walls n=4000 (all three seeds each). On those rows the medians describe one light position, not the path.
 
 ## Results
 
-Columns that combine seeds (k, T, times, counters) are the median over the three seeds, computed per column; the speedup columns are the median of the per-seed speedups, so they need not equal the ratio of the medians shown. Times are per query. The last column is the largest ratio of a row's maximum sample to its median sample among the three seeds.
+How to read the main table:
+
+- Columns that combine seeds (k, T, times, counters) are the median over the three seeds, computed per column.
+- The speedup columns are the median of the per-seed speedups. They don't have to equal the ratio of the medians shown.
+- Times are per query.
+- The last column is the largest ratio of a row's maximum sample to its median sample among the three seeds.
 
 | Layout | n | k | T | Brute median | Grid median | Speedup (total) | Speedup (cast only) | Brute wall tests | Grid wall tests | Grid cells walked | Positions used | Brute / Grid samples | Largest max/median (Brute / Grid) |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|
@@ -144,7 +174,7 @@ Scatter with 16 and 64 walls, 64 positions, all 15 samples used:
 
 ## Grid-resolution sweep
 
-n = 1000, seed 1. Scale multiplies the automatic columns and rows (`Scene::autoResolution`) and the result is passed to `Scene::setGridResolution`. Scatter used 64 positions; Long walls used 8-10 positions and 3 Brute samples.
+n = 1000, seed 1. Scale multiplies the automatic columns and rows (`Scene::autoResolution`), and the result is passed to `Scene::setGridResolution`. Scatter used 64 positions. Long walls used 8-10 positions and 3 Brute samples.
 
 | Layout | scale | cols x rows | Registrations | Max walls per cell | Grid median | sort / cast | Grid wall tests | Cells walked | Speedup (total) | Grid rebuild | Add+remove pair | Positions |
 |---|---:|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|
@@ -161,7 +191,7 @@ n = 1000, seed 1. Scale multiplies the automatic columns and rows (`Scene::autoR
 
 ## Edit costs
 
-Median over seeds. Both numbers are paid once per edit, not per frame. `addWall` and `removeWall` each rebuild everything, so the pair costs about two rebuilds.
+Median over seeds. You pay both numbers once per edit, not per frame. `addWall` and `removeWall` each rebuild everything, so the pair costs about two rebuilds.
 
 | Layout | n | Grid build (setWalls) | Crossings + targets (setWalls) | addWall + removeWall pair |
 |---|---:|---:|---:|---:|
@@ -180,17 +210,29 @@ Median over seeds. Both numbers are paid once per edit, not per frame. `addWall`
 
 ## Where the grid loses or barely wins
 
-- **Cluster at small n.** Cluster n=250: speedup 1.52x, 1.79x, 1.53x for seeds 1-3. All walls lie in a patch of a few cells (max walls in one cell: 241, 186, 219 for seeds 1-3), so a ray that enters the patch tests most of them. Grid wall tests per query against Brute's: seed 1: 151,584 of 246,888; seed 2: 110,754 of 244,856; seed 3: 142,137 of 243,078. The grid saves little because it cannot separate walls that share cells. At n=4000 the same layout shows 24.6x, 43.8x, 29.3x (seeds 1-3); for seed 1 the Grid tests are 16,090,211 against 460,271,812.
-- **n = 16.** Scatter with 16 walls: 1.12x, 1.13x, 1.11x (Brute 11.21, 11.61, 11.23 us; Grid 10.03, 10.29, 10.10 us). The scene has no crossings (k = 0) and T = 36 targets, so the per-query work is a few microseconds in either mode and the walk's setup cost is of the same order as the tests it saves.
-- **Sorting dominates the Grid total on Scatter and Maze.** In 27 of 66 rows the median Grid sort time is larger than the Grid cast time; all of them are Maze or Scatter rows. The sort is `O(T log T)` with the exact comparator and is the same in both modes, so the grid does not reduce it. For Scatter n=1000, seed 1 the Grid median is 670.1 us, of which 412.4 us is sort. The cast-only speedup (78.2x at that row) is therefore larger than the total speedup (30.7x).
-- **Long walls: large k makes every query expensive in both modes.** The algorithm casts one ray per target (collinear targets share one) whether or not the target is visible: over all 66 rows the mean rays per query divided by T is between 0.998 and 1.000. Two families of near-parallel long walls produce many crossings, hence many targets. Long walls n=1000, seed 1: k = 21,722, T = 23,726, rays per query 23,726, Brute 314.8 ms, Grid 17.1 ms. At n=4000, seed 1: k = 337,930, T = 345,934, Brute 21.78 s, Grid 696.0 ms. The grid still reduces wall tests (1,385,119,736 to 44,989,172 at n=4000, seed 1), but the number of rays is fixed by T, and each long wall is registered in many cells (max 103 walls in a cell at n=4000; 272,772 registrations).
-- **Finer grids cost registrations and rebuild time.** In the sweep, Long walls improves with each doubling up to 4x the automatic resolution (Grid 62.2 ms at 0.25x, 8.00 ms at 4x) while registrations grow from 9,279 to 136,191 and the grid build from 192.4 us to 2.02 ms. Scatter changes little above 1x (656.3 us, 624.3 us, 594.9 us at 1x, 2x, 4x) while its grid build grows from 91.1 us to 252.7 us.
+- **Cluster at small n.** Cluster n=250 speeds up only 1.52x, 1.79x and 1.53x (seeds 1-3).
+  - All the walls sit in a patch of a few cells. The most walls in one cell are 241, 186 and 219 (seeds 1-3). A ray that enters the patch tests most of them.
+  - Grid wall tests per query against Brute's: seed 1: 151,584 of 246,888; seed 2: 110,754 of 244,856; seed 3: 142,137 of 243,078.
+  - The grid saves little because it can't separate walls that share cells.
+  - At n=4000 the same layout shows 24.6x, 43.8x and 29.3x (seeds 1-3). For seed 1 the Grid tests are 16,090,211 against 460,271,812.
+- **n = 16.** Scatter with 16 walls: 1.12x, 1.13x, 1.11x (Brute 11.21, 11.61, 11.23 us; Grid 10.03, 10.29, 10.10 us). The scene has no crossings (k = 0) and T = 36 targets. A query takes a few microseconds in either mode, and the walk's setup cost is about the same size as the tests it saves.
+- **Sorting dominates the Grid total on Scatter and Maze.** In 27 of 66 rows the median Grid sort time is larger than the Grid cast time, and all of them are Maze or Scatter rows.
+  - The sort is `O(T log T)` with the exact comparator. It's the same in both modes, so the grid doesn't shrink it.
+  - Scatter n=1000, seed 1: the Grid median is 670.1 us, of which 412.4 us is sort.
+  - So the cast-only speedup (78.2x at that row) is much larger than the total speedup (30.7x).
+- **Long walls: large k makes every query expensive in both modes.**
+  - The algorithm casts one ray per target (collinear targets share one), whether or not the target is visible. Over all 66 rows, mean rays per query divided by T is between 0.998 and 1.000.
+  - Two families of near-parallel long walls produce lots of crossings, so lots of targets.
+  - Long walls n=1000, seed 1: k = 21,722, T = 23,726, rays per query 23,726, Brute 314.8 ms, Grid 17.1 ms.
+  - n=4000, seed 1: k = 337,930, T = 345,934, Brute 21.78 s, Grid 696.0 ms.
+  - The grid still cuts wall tests (1,385,119,736 down to 44,989,172 at n=4000, seed 1). But T fixes the number of rays, and each long wall is registered in many cells (max 103 walls in a cell at n=4000; 272,772 registrations).
+- **Finer grids cost registrations and rebuild time.** In the sweep, Long walls keeps improving with each doubling up to 4x the automatic resolution (Grid 62.2 ms at 0.25x, 8.00 ms at 4x). Over the same range registrations grow from 9,279 to 136,191 and the grid build from 192.4 us to 2.02 ms. Scatter changes little above 1x (656.3 us, 624.3 us, 594.9 us at 1x, 2x, 4x), while its grid build grows from 91.1 us to 252.7 us.
 
 ## Limitations
 
-- **Hardware and drift.** One laptop-class CPU (see Environment); clocks and power state were not pinned. Rows run minutes apart; compare Brute and Grid within a row (they alternate in time) and treat absolute times as indicative. For a check of consistency: Brute for the Scatter n=1000, seed 1 scene is 20.6 ms in the main table row and 21.9 ms in the 1x sweep row.
-- **Spread.** The largest maximum-to-median ratios are 2.90 (Grid, Scatter n=500 seed 2) and 1.87 (Brute, Long walls n=250 seed 3); minima and maxima of every row are in `results.csv` (`*_min_us`, `*_max_us`).
-- **Few samples and positions on the largest rows.** See the Positions and Samples columns. Brute rows at n >= 2000 have 3 or 4 samples; the n = 1000 rows have 3 to 10.
+- **Hardware and drift.** One laptop-class CPU (see Environment). Clocks and power state were not pinned, and rows run minutes apart. Compare Brute and Grid within a row, since they alternate in time, and treat absolute times as indicative. As a consistency check: Brute for the Scatter n=1000, seed 1 scene is 20.6 ms in the main table row and 21.9 ms in the 1x sweep row.
+- **Spread.** The largest maximum-to-median ratios are 2.90 (Grid, Scatter n=500 seed 2) and 1.87 (Brute, Long walls n=250 seed 3). Minima and maxima of every row are in `results.csv` (`*_min_us`, `*_max_us`).
+- **Few samples and positions on the largest rows.** See the Positions and Samples columns. Brute rows at n >= 2000 have 3 or 4 samples. The n = 1000 rows have 3 to 10.
 - **One world size.** All scenes are 1600 x 1000 with one light, single-threaded.
 - **Gate scope.** The Brute/Grid equality gate covers the positions timed in each row, which is a single position on the single-position rows. Broader equality checks are in the test suite (`differential: ...` test cases in `tests/test_differential.cpp`).
-- Results are for the build in `results.meta.txt`; other compilers, flags or machines were not measured.
+- Results are for the build in `results.meta.txt`. Other compilers, flags or machines were not measured.

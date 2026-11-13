@@ -41,8 +41,8 @@ LegendModel buildLegend(const App& app, bool condensed) {
             if (grid) {
                 std::uint32_t mx = 0;
                 for (std::uint32_t v : app.trace.cellVisits) mx = std::max(mx, v);
-                m.rows.push_back({Swatch::Heat, 0, "Brighter = more rays (max " + ui::fmtInt(mx) + ")"});
-                m.rows.push_back({Swatch::Dot, IM_COL32(190, 200, 225, 220), "Dot: square holds a wall"});
+                m.rows.push_back({Swatch::Heat, 0, "Brighter = more rays (most: " + ui::fmtInt(mx) + ")"});
+                m.rows.push_back({Swatch::Dot, IM_COL32(190, 200, 225, 220), "Dot: a wall is in this square"});
             } else {
                 m.rows.push_back({Swatch::Line, IM_COL32(120, 210, 255, 220), "One ray"});
             }
@@ -50,23 +50,23 @@ LegendModel buildLegend(const App& app, bool condensed) {
         case Overlay::Probe:
             m.title = "One ray";
             if (condensed) break;
-            m.rows.push_back({Swatch::Line, ui::kAmber, grid ? "Tested walls" : "All walls tested"});
+            m.rows.push_back({Swatch::Line, ui::kAmber, grid ? "Checked walls" : "All walls checked"});
             if (grid) {
                 m.rows.push_back({Swatch::Line, IM_COL32(120, 128, 150, 255), "Skipped walls"});
-                m.rows.push_back({Swatch::Square, ui::kCyan, "Squares crossed, in order"});
+                m.rows.push_back({Swatch::Square, ui::kCyan, "Squares it passed, in order"});
             }
-            m.rows.push_back({Swatch::Dot, ui::kGold, "Hit point"});
+            m.rows.push_back({Swatch::Dot, ui::kGold, "Where it hits"});
             {
                 // Same test render.cpp uses to draw one gold marker instead of a green and a pink one.
                 const vis::Trace::RayRecord* p = app.probe();
                 const bool merged = p != nullptr && p->tMinus == p->tPlus;
-                m.rows.push_back({Swatch::DotPair, 0, "Two colours: sides hit different walls", merged});
+                m.rows.push_back({Swatch::DotPair, 0, "Two colours: each side hits a different wall", merged});
             }
             break;
         case Overlay::Rays:
             m.title = "All rays";
             if (condensed) break;
-            m.rows.push_back({Swatch::Line, IM_COL32(120, 210, 255, 220), "Ray, to where it stops"});
+            m.rows.push_back({Swatch::Line, IM_COL32(120, 210, 255, 220), "Each ray, up to its hit"});
             break;
     }
     return m;

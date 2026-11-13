@@ -4,7 +4,7 @@ Exact hard shadows for a point light among line-segment walls. C++20, with an in
 
 ![Demo room: a light, walls, and the area the light can see](docs/images/simple_demo.png)
 
-- **Exact.** No angular offsets or epsilon tricks; every side-of-line decision uses exact arithmetic.
+- **Exact.** No angle nudging or epsilon tricks. Every side-of-line test uses exact arithmetic.
 - **Two methods, one result.** A simple one and a faster one give bit-identical output.
 - **Easy to explore.** Drag the light, draw walls, watch how much work each method does.
 - **Tested.** 60 test cases, 757,017 assertions, plus a scripted test of the whole app.
@@ -57,7 +57,7 @@ Two levels, switched at the top of the panel: **Simple** (plain words) and **Eng
 | Scatter | Maze | Long walls | Cluster |
 |---|---|---|---|
 | ![Scatter](docs/images/stress_scatter_grid.png) | ![Maze](docs/images/stress_maze_grid.png) | ![Long walls](docs/images/stress_long_grid.png) | ![Cluster](docs/images/stress_cluster_grid.png) |
-| Grid's best case | Rooms and corridors | Hard for both | Grid helps least |
+| Grid loves it | Rooms and halls | Tough on both | Grid helps least |
 
 All screenshots are real captures at 1,000 walls (`tests/scripts/captures.script`).
 
