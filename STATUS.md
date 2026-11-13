@@ -20,7 +20,7 @@ Last updated: 2026-11-13. All five stages are complete; the required scope is de
 
 ## UI refresh (2026-11-13)
 
-The desktop interface was redesigned for a first-time viewer (commit "Refresh the demo UI for newcomers"): Simple and Engine levels, method cards ("All walls" = Baseline, "Grid" = Grid), renamed overlays, a work meter, scene cards with a wall-count slider, a legend, a six-step guided tour that starts on a plain launch, and cursor feedback. The reasoning is decision 12 in `docs/DECISIONS.md`; the behaviour is described in `README.md`. `core/`, `bench/` and the benchmark results were not touched by it.
+The desktop interface was redesigned for a first-time viewer (commit "Refresh the demo UI for newcomers"): Simple and Engine levels, method cards ("All walls" = Baseline, "Grid" = Grid), renamed overlays, a work meter, scene cards with a wall-count slider, a legend, a six-step guided tour that starts on a plain launch, and cursor feedback. The reasoning is decision 12 in `docs/DECISIONS.md`; the behaviour is described in `docs/APP.md`. `core/`, `bench/` and the benchmark results were not touched by it.
 
 | Check | Result | Evidence |
 |---|---|---|
