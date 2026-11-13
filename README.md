@@ -154,7 +154,7 @@ Everything in the tour, then:
 
 A script is a text file, one command per line, `#` starts a comment. Events go through ImGui's input queue, so the real canvas input handling runs; real OS mouse and keyboard delivery through GLFW is not exercised, and neither is the cursor shape the OS displays. Commands (documented in `app/script.h`):
 
-- Mouse and keys: `move X Y`, `move @Button Label` (the centre of a panel or tour-card button, for example `move @Engine details` or `move @Next`), `wmove X Y` (world coordinates through the app's transform), `down|up left|right`, `key Tab|R|C|O|M|1|2|3|4|Escape`, `wait N` (frames).
+- Mouse and keys: `shift on|off` (hold Shift, which snaps a drawn wall to existing end points), `move X Y`, `move @Button Label` (the centre of a panel or tour-card button, for example `move @Engine details` or `move @Next`), `wmove X Y` (world coordinates through the app's transform), `down|up left|right`, `key Tab|R|C|O|M|1|2|3|4|Escape`, `wait N` (frames).
 - Output: `capture file.bmp`, `log`, `print FIELD...`, `quit`.
 - State: `set walls N | seed N | compare on|off | mode brute|grid | overlay off|grid|probe|rays | detail simple|details | tour on|off`.
 - Checks: `save NAME FIELD`, `expect FIELD OP VALUE` (`== != < <= > >= has`, the value may be `$NAME`). The process exits non-zero if any `expect` fails.
