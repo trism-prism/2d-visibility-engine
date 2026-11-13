@@ -16,6 +16,7 @@
 //   log                                          print one state line
 //   print FIELD...                               print the named state fields as field=value
 //   set walls N | seed N | compare on|off | mode brute|grid | overlay off|grid|probe|rays
+//       | detail simple|details | tour on|off
 //   save NAME FIELD                              remember a state field
 //   expect FIELD OP VALUE                        OP: == != < <= > >= has; VALUE may be $NAME
 //   quit

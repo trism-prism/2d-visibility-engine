@@ -1,13 +1,17 @@
 // Canvas drawing. Everything about the algorithm that is drawn here (cells walked, walls tested, hit
 // points, rays) is read from App::trace, the Grid or the Scene: nothing is recomputed or invented.
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
+#include <string>
 #include <cstdio>
 #include <vector>
 
 #include <imgui_internal.h>  // ImDrawListSharedData: the white-pixel UV for the vertex-coloured mesh
 
 #include "app.h"
+#include "legend.h"
+#include "widgets.h"
 
 using vis::Vec2;
 
@@ -114,24 +118,6 @@ void drawGridLines(ImDrawList* dl, const App& app, int alpha) {
     }
 }
 
-void legend(ImDrawList* dl, const App& app, const char* const* lines, int count) {
-    const float pad = 8.0f * app.uiScale;
-    float w = 0, h = 0;
-    for (int i = 0; i < count; ++i) {
-        const ImVec2 sz = ImGui::CalcTextSize(lines[i]);
-        w = std::max(w, sz.x);
-        h += sz.y + 2;
-    }
-    const ImVec2 lo{app.canvasMin.x + 10 * app.uiScale, app.canvasMax.y - h - 2 * pad - 10 * app.uiScale};
-    dl->AddRectFilled(lo, {lo.x + w + 2 * pad, lo.y + h + 2 * pad}, IM_COL32(12, 14, 20, 215), 4.0f);
-    dl->AddRect(lo, {lo.x + w + 2 * pad, lo.y + h + 2 * pad}, IM_COL32(70, 78, 100, 255), 4.0f);
-    float y = lo.y + pad;
-    for (int i = 0; i < count; ++i) {
-        dl->AddText({lo.x + pad, y}, i == 0 ? IM_COL32(240, 244, 255, 255) : IM_COL32(170, 180, 205, 255), lines[i]);
-        y += ImGui::CalcTextSize(lines[i]).y + 2;
-    }
-}
-
 void drawRays(ImDrawList* dl, const App& app, ImVec2 lp, int alpha) {
     const ImU32 col = IM_COL32(120, 210, 255, alpha);
     for (const vis::Trace::RayRecord& r : app.trace.rays) {
@@ -141,7 +127,73 @@ void drawRays(ImDrawList* dl, const App& app, ImVec2 lp, int alpha) {
     }
 }
 
+
+// "Drag me" pill beside the light, on whichever side (above, right, left, below) has the fewest walls
+// under it and stays inside the world; a small pointer touches the handle.
+bool segmentHitsRect(ImVec2 a, ImVec2 b, ImVec2 lo, ImVec2 hi) {
+    float t0 = 0.0f, t1 = 1.0f;
+    const float dx = b.x - a.x, dy = b.y - a.y;
+    const float p[4] = {-dx, dx, -dy, dy};
+    const float q[4] = {a.x - lo.x, hi.x - a.x, a.y - lo.y, hi.y - a.y};
+    for (int i = 0; i < 4; ++i) {
+        if (p[i] == 0.0f) {
+            if (q[i] < 0.0f) return false;
+        } else {
+            const float t = q[i] / p[i];
+            if (p[i] < 0.0f) t0 = std::max(t0, t);
+            else t1 = std::min(t1, t);
+            if (t0 > t1) return false;
+        }
+    }
+    return true;
+}
+
+void drawDragHint(ImDrawList* dl, const App& app, ImVec2 lp, float grab) {
+    const float ui = app.uiScale;
+    const char* tip = "Drag me";
+    const float px = 15.0f * ui;
+    const ImVec2 ts = app.uiFont->CalcTextSizeA(px, FLT_MAX, 0.0f, tip);
+    const ImVec2 size{ts.x + 16.0f * ui, ts.y + 8.0f * ui};
+    const float off = grab + 12.0f * ui;
+    const ImVec2 wmin = app.view.toScreen({0, 0}), wmax = app.view.toScreen({app.scene.width(), app.scene.height()});
+    struct Cand { ImVec2 lo; int dir; };  // dir: 0 above, 1 right, 2 left, 3 below
+    const Cand cands[4] = {{{lp.x - size.x * 0.5f, lp.y - off - size.y}, 0},
+                           {{lp.x + off, lp.y - size.y * 0.5f}, 1},
+                           {{lp.x - off - size.x, lp.y - size.y * 0.5f}, 2},
+                           {{lp.x - size.x * 0.5f, lp.y + off}, 3}};
+    int best = 0;
+    long long bestScore = 1LL << 40;
+    for (int c = 0; c < 4; ++c) {
+        const ImVec2 lo = cands[c].lo, hi{lo.x + size.x, lo.y + size.y};
+        long long score = 0;
+        if (lo.x < wmin.x || lo.y < wmin.y || hi.x > wmax.x || hi.y > wmax.y) score += 100000;
+        const ImVec2 pad{4.0f * ui, 4.0f * ui};
+        for (const vis::Segment& w : app.scene.walls())
+            if (segmentHitsRect(app.view.toScreen(w.a), app.view.toScreen(w.b), lo - pad, hi + pad)) ++score;
+        if (score < bestScore) {
+            bestScore = score;
+            best = c;
+        }
+    }
+    const Cand& c = cands[best];
+    const ImVec2 lo = c.lo, hi{lo.x + size.x, lo.y + size.y};
+    const ImU32 fill = IM_COL32(255, 196, 90, 240);
+    ImVec2 tri[3];
+    const float t = 6.0f * ui;
+    switch (c.dir) {
+        case 0: tri[0] = {lp.x - t, hi.y - 1}; tri[1] = {lp.x + t, hi.y - 1}; tri[2] = {lp.x, hi.y + t}; break;
+        case 1: tri[0] = {lo.x + 1, lp.y - t}; tri[1] = {lo.x + 1, lp.y + t}; tri[2] = {lo.x - t, lp.y}; break;
+        case 2: tri[0] = {hi.x - 1, lp.y - t}; tri[1] = {hi.x - 1, lp.y + t}; tri[2] = {hi.x + t, lp.y}; break;
+        default: tri[0] = {lp.x - t, lo.y + 1}; tri[1] = {lp.x + t, lo.y + 1}; tri[2] = {lp.x, lo.y - t}; break;
+    }
+    dl->AddRectFilled(lo, hi, fill, 6.0f * ui);
+    dl->AddTriangleFilled(tri[0], tri[1], tri[2], fill);
+    dl->AddText(app.uiFont, px, {lo.x + 8.0f * ui, lo.y + 4.0f * ui}, IM_COL32(30, 20, 5, 255), tip);
+}
+
 }  // namespace
+
+ImU32 heatColour(float t) { return heat(t); }
 
 void drawCanvas(ImDrawList* dl, const App& app) {
     const vis::Scene& scene = app.scene;
@@ -262,21 +314,22 @@ void drawCanvas(ImDrawList* dl, const App& app) {
             const ImVec2 p = app.view.toScreen(app.light + r.dir * t);
             dl->AddCircleFilled(p, 4.5f * ui, col, 14);
             dl->AddCircle(p, 6.5f * ui, IM_COL32(255, 255, 255, 200), 14, 1.2f);
-            char label[64];
-            std::snprintf(label, sizeof label, "%s = %.3f", name, t);
-            const ImVec2 sz = ImGui::CalcTextSize(label);
-            ImVec2 at = p + perp * (side * (18.0f * ui)) ;
+            const ImVec2 sz = ImGui::CalcTextSize(name);
+            ImVec2 at = p + perp * (side * (18.0f * ui));
             if (side < 0) at.x -= sz.x * (perp.x > 0 ? 1.0f : 0.0f);
             else at.x -= sz.x * (perp.x < 0 ? 1.0f : 0.0f);
             at.y -= sz.y * 0.5f;
             dl->AddRectFilled({at.x - 4, at.y - 2}, {at.x + sz.x + 4, at.y + sz.y + 2}, IM_COL32(10, 12, 18, 225), 3.0f);
-            dl->AddText(at, col, label);
+            dl->AddText(at, col, name);
         };
         if (r.tMinus == r.tPlus) {
-            marker(r.tMinus, IM_COL32(255, 230, 120, 255), "tMinus = tPlus", 1.0f);
+            marker(r.tMinus, ui::kGold, "hits here", 1.0f);
         } else {
-            marker(r.tMinus, IM_COL32(120, 255, 170, 255), "tMinus", -1.0f);
-            marker(r.tPlus, IM_COL32(255, 130, 220, 255), "tPlus", 1.0f);
+            // The two sides of the ray end at different walls. The nearer end is where one side stops;
+            // the farther end is where the other side's view continues to. Each label sits on its own side.
+            const bool minusNear = r.tMinus < r.tPlus;
+            marker(r.tMinus, ui::kGreen, minusNear ? "stops here on this side" : "continues to here on the other side", -1.0f);
+            marker(r.tPlus, ui::kPink, minusNear ? "continues to here on the other side" : "stops here on this side", 1.0f);
         }
     }
 
@@ -288,13 +341,19 @@ void drawCanvas(ImDrawList* dl, const App& app) {
         dl->AddCircleFilled(b, 4.0f * ui, kAccent, 12);
     }
 
-    // ---- light handle ----
+    // ---- light handle: pulses and says "Drag me" until it has been dragged once ----
     {
-        const float grab = 16.0f * ui;
+        const float grab = app.grabRadius();
         const bool active = app.hoverLight || app.draggingLight;
-        dl->AddCircleFilled(lp, grab, IM_COL32(255, 196, 90, active ? 60 : 28), 28);
-        dl->AddCircle(lp, grab, IM_COL32(255, 214, 140, active ? 255 : 150), 28, active ? 2.0f : 1.2f);
-        dl->AddCircleFilled(lp, 6.0f * ui, IM_COL32(255, 248, 224, 255), 20);
+        if (!app.lightMoved && !app.draggingLight) {
+            const float phase = static_cast<float>(std::fmod(app.now, 1.8) / 1.8);
+            dl->AddCircle(lp, grab * (1.0f + 0.7f * phase), IM_COL32(255, 214, 140, static_cast<int>(190.0f * (1.0f - phase))), 40, 2.2f * ui);
+        }
+        dl->AddCircleFilled(lp, grab, IM_COL32(255, 196, 90, active ? 70 : 34), 36);
+        dl->AddCircle(lp, grab, IM_COL32(255, 214, 140, active ? 255 : 190), 36, active ? 2.4f * ui : 1.6f * ui);
+        dl->AddCircleFilled(lp, 8.5f * ui, IM_COL32(40, 28, 10, 200), 22);
+        dl->AddCircleFilled(lp, 6.5f * ui, IM_COL32(255, 248, 224, 255), 20);
+        if (!app.lightMoved && !app.draggingLight) drawDragHint(dl, app, lp, grab);
     }
 
     if (app.outline && app.result.polygon.size() >= 3) {
@@ -304,50 +363,8 @@ void drawCanvas(ImDrawList* dl, const App& app) {
         dl->AddPolyline(pts.data(), static_cast<int>(pts.size()), IM_COL32(94, 196, 255, 190), ImDrawFlags_Closed, 1.2f);
     }
 
-    // ---- legends ----
-    if (app.overlay == Overlay::Grid) {
-        char l1[96], l2[96];
-        if (app.mode == vis::Mode::Grid) {
-            std::snprintf(l1, sizeof l1, "Tint: rays that walked each cell (max %u)", [&] {
-                std::uint32_t m = 0;
-                for (std::uint32_t v : app.trace.cellVisits) m = std::max(m, v);
-                return m;
-            }());
-            std::snprintf(l2, sizeof l2, "Dots: cells with registered walls. %d x %d cells", grid.cols(), grid.rows());
-            const char* lines[] = {"Overlay: grid cells", l1, l2};
-            legend(dl, app, lines, 3);
-        } else {
-            const char* lines[] = {"Overlay: grid cells", "Baseline mode: no grid walk happens.",
-                                   "Showing the cast rays only; switch to Grid to see cells."};
-            legend(dl, app, lines, 3);
-        }
-    } else if (app.overlay == Overlay::Probe) {
-        const vis::Trace::RayRecord* pr = app.probe();
-        if (!pr) {
-            const char* lines[] = {"Overlay: probe ray", "Move the cursor over the canvas."};
-            legend(dl, app, lines, 2);
-        } else {
-            const vis::Trace::RayRecord& r = *pr;
-            const std::size_t testedWalls = app.probeWalls(r);
-            char l1[112], l2[112];
-            if (app.mode == vis::Mode::Grid) {
-                std::snprintf(l1, sizeof l1, "Probe ray: %u cells walked, %zu of %zu walls tested", r.cellEnd - r.cellBegin,
-                              testedWalls, scene.wallCount());
-                std::snprintf(l2, sizeof l2, "Orange: tested walls. Muted: skipped. Cyan cells in visiting order.");
-            } else {
-                std::snprintf(l1, sizeof l1, "Probe ray: Baseline tests all %zu of %zu walls", testedWalls,
-                              scene.wallCount());
-                std::snprintf(l2, sizeof l2, "Orange: every wall is tested. No cells: Baseline has no grid.");
-            }
-            const char* lines[] = {"Overlay: probe ray (nearest the cursor)", l1, l2};
-            legend(dl, app, lines, 3);
-        }
-    } else if (app.overlay == Overlay::Rays) {
-        char l1[96];
-        std::snprintf(l1, sizeof l1, "%zu rays, drawn to their one-sided hits", app.trace.rays.size());
-        const char* lines[] = {"Overlay: all rays", l1};
-        legend(dl, app, lines, 2);
-    }
+    // ---- legend: in the strip below the world, never over it ----
+    if (app.strip.legend) drawLegend(dl, app, buildLegend(app, app.strip.condensed), app.strip.legendPos, app.strip.legendSize.x);
 
     dl->PopClipRect();
 }

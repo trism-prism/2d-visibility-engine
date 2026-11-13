@@ -161,6 +161,8 @@ bool Script::tick(App& app, ImGuiIO& io) {
             else if (k == "seed") app.seed = std::atoi(v.c_str());
             else if (k == "compare") { app.compare = v == "on"; app.markDirty(); }
             else if (k == "mode") { app.mode = v == "brute" ? vis::Mode::Brute : vis::Mode::Grid; app.markDirty(); }
+            else if (k == "detail") app.detail = v == "details" ? Detail::Engine : Detail::Simple;
+            else if (k == "tour") { if (v == "on") app.tourStart(); else app.tourClose(); }
             else if (k == "overlay") {
                 app.overlay = v == "grid" ? Overlay::Grid : v == "probe" ? Overlay::Probe : v == "rays" ? Overlay::Rays : Overlay::Off;
                 app.markDirty();

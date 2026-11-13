@@ -7,6 +7,9 @@ expect mode == grid
 expect walls == 55
 expect light_x == 610
 expect light_y == 290
+expect tour == off
+expect light_hint == yes
+expect detail == simple
 
 # --- drag the light: press on the handle, move, release
 save lx light_x
@@ -26,6 +29,7 @@ expect light_y > 517.5
 expect light_y < 522.5
 expect walls == 55
 expect poly_hash != $poly0
+expect light_hint == no
 
 # --- draw a wall: wall count +1 and the polygon changes
 save poly1 poly_hash
@@ -47,7 +51,7 @@ up left
 wait 2
 log
 expect walls == 56
-expect status has rejected
+expect status has too short
 
 # --- right-click deletes the wall just drawn
 wmove 900 630
@@ -56,7 +60,7 @@ up right
 wait 2
 log
 expect walls == 55
-expect status has Wall deleted
+expect status has Wall removed
 
 # --- right-click on a boundary wall: nothing is deleted, the status line says so
 wmove 800 0
@@ -65,7 +69,7 @@ up right
 wait 2
 log
 expect walls == 55
-expect status has Boundary walls cannot be deleted
+expect status has The outer walls can't be removed
 
 # --- a user wall on the world edge (within a fraction of a pixel of the boundary wall) is deletable:
 # user walls are picked before the boundary wall next to them. (Injected mouse positions arrive
@@ -83,22 +87,22 @@ up right
 wait 2
 log
 expect walls == 55
-expect status has Wall deleted
+expect status has Wall removed
 
 # --- clicking on the panel (empty area and a button) must not create a wall
 save poly2 poly_hash
-move 1150 745
+move 1100 100
 down left
 up left
 wait 2
 expect walls == 55
 expect drawing == no
-move @Reset demo
+move @Reset
 down left
 up left
 wait 2
 log
-expect status has Demo scene loaded
+expect status has Demo room loaded
 expect walls == 55
 expect light_x == 610
 
@@ -233,4 +237,239 @@ expect scene == cluster
 expect walls >= 1000
 key R
 expect walls == 55
+
+# =====================================================================================
+# UI refresh checks. State here: demo room, Grid method, overlay off, Simple level.
+# =====================================================================================
+key R
+wait 3
+set overlay off
+set mode grid
+wait 3
+
+# --- Simple / Engine details toggle; Simple fits at 1280x800 without scrolling
+expect detail == simple
+expect panel_overflow == no
+move @Engine details
+down left
+up left
+wait 4
+expect detail == details
+move @Simple
+down left
+up left
+wait 4
+expect detail == simple
+expect panel_overflow == no
+
+# --- work meter on the demo room, Grid active: baseline count is exactly rays x walls, grid count is
+# the measured wall tests
+expect scene == demo
+save prod rays_x_walls
+expect meter_baseline == $prod
+save rr rays
+save ww walls_total
+expect meter_rays == $rr
+expect meter_walls == $ww
+expect meter_source == measured
+save wtg wall_tests
+expect meter_grid == $wtg
+expect meter_verdict has of the work here
+print rays walls_total meter_rays meter_walls meter_baseline meter_grid meter_source meter_verdict query_median_us
+save g meter_grid
+save lxm light_x
+save lym light_y
+# --- Baseline active: baseline count == measured wall tests == rays x walls; the grid number comes from
+# the untimed extra pass and equals what Grid mode reports for the same light
+key Tab
+wait 4
+expect mode == brute
+save prodB rays_x_walls
+expect meter_baseline == $prodB
+expect wall_tests == $prodB
+expect meter_source == extra_pass
+expect meter_grid == $g
+expect light_x == $lxm
+expect light_y == $lym
+print rays walls_total meter_baseline meter_grid meter_source meter_verdict
+key Tab
+wait 4
+expect mode == grid
+expect wall_tests == $g
+expect meter_grid == $g
+print rays walls_total meter_baseline meter_grid meter_source
+
+# --- the same on a 1000-wall scene, driven by the scene card
+move @Scattered walls
+down left
+up left
+wait 5
+expect scene == scatter
+save prod1 rays_x_walls
+save wt1 wall_tests
+expect meter_baseline == $prod1
+expect meter_grid == $wt1
+save g2 meter_grid
+save prod2 meter_baseline
+key Tab
+wait 5
+expect wall_tests == $prod2
+expect meter_source == extra_pass
+expect meter_grid == $g2
+expect meter_grid < $prod2
+print scene rays walls_total meter_baseline meter_grid meter_source meter_verdict
+key Tab
+wait 3
+
+# --- slow-scene note: Long walls under "Check every wall"
+set mode brute
+key 3
+wait 4
+expect scene == longwalls
+expect slow_note == yes
+expect slow_ms > 30
+expect slow_text has slow with
+expect meter_source == skipped
+expect meter_grid == unknown
+save prod3 rays_x_walls
+expect meter_baseline == $prod3
+print scene slow_ms slow_text meter_baseline meter_source meter_verdict
+# the note is about Baseline, so it is also shown while the grid is active
+set mode grid
+wait 4
+expect slow_note == yes
+# the note must not push the Simple panel into scrolling (Grid: one note, Baseline: note + advice)
+expect panel_overflow == no
+set mode brute
+wait 4
+expect panel_overflow == no
+set mode grid
+key 4
+wait 5
+expect scene == cluster
+expect panel_overflow == no
+set mode brute
+key R
+wait 4
+expect slow_note == no
+set mode grid
+wait 3
+
+# --- plain-language captions come from real data
+set overlay grid
+wait 3
+expect caption has squares. Brighter squares were crossed by more rays
+set overlay probe
+wmove 800 300
+wait 3
+expect caption has This one crossed
+expect caption has walls.
+set mode brute
+wait 3
+expect caption has This one had to test all 59 walls
+set mode grid
+set overlay rays
+wait 3
+expect caption has rays, one aimed at each direction
+set overlay off
+wait 2
+
+# --- cursors: hand over the light, crosshair where a click starts a wall, arrow over the panel
+wmove 610 290
+wait 2
+expect cursor == hand
+wmove 300 700
+wait 2
+expect cursor == cross
+move 1100 100
+wait 2
+expect cursor == arrow
+
+# --- tour: not auto-started under --script, opened by the button, Next / Back / Close
+expect tour == off
+move @Take the tour
+down left
+up left
+wait 4
+expect tour == on
+expect tour_step == 1
+expect scene == demo
+expect mode == grid
+move @Next
+down left
+up left
+wait 3
+expect tour_step == 2
+move @Next
+down left
+up left
+wait 3
+expect tour_step == 3
+expect overlay == probe
+move @Next
+down left
+up left
+wait 3
+expect tour_step == 4
+expect mode == brute
+expect overlay == probe
+move @Back
+down left
+up left
+wait 3
+expect tour_step == 3
+expect mode == grid
+move @Next
+down left
+up left
+wait 3
+expect tour_step == 4
+# a click on the tour card never creates a wall
+save wcard walls
+move @tour card
+down left
+up left
+wait 3
+expect walls == $wcard
+expect drawing == no
+expect tour == on
+move @Next
+down left
+up left
+wait 5
+expect tour_step == 5
+expect scene == scatter
+expect walls == 1000
+expect mode == grid
+move @Next
+down left
+up left
+wait 5
+expect tour_step == 6
+expect scene == cluster
+move @Next
+down left
+up left
+wait 3
+expect tour == off
+# Close button and Esc
+move @Take the tour
+down left
+up left
+wait 4
+expect tour == on
+expect scene == demo
+move @Close
+down left
+up left
+wait 3
+expect tour == off
+set tour on
+wait 3
+expect tour == on
+key Escape
+wait 2
+expect tour == off
+# the world is not covered by the tour card, and the panel still works with the tour closed
+expect panel_overflow == no
 quit

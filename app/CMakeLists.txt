@@ -32,6 +32,11 @@ add_executable(vis_app
   main.cpp
   app.cpp
   ui.cpp
+  widgets.cpp
+  meter.cpp
+  details.cpp
+  tour.cpp
+  legend.cpp
   render.cpp
   script.cpp
   bmp.cpp)
@@ -43,5 +48,5 @@ if(VIS_BUILD_TESTS)
   add_test(NAME app_script
     COMMAND vis_app --size 1280x800 --script ${CMAKE_SOURCE_DIR}/tests/scripts/main.script
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
-  set_tests_properties(app_script PROPERTIES LABELS app TIMEOUT 300)
+  set_tests_properties(app_script PROPERTIES LABELS app TIMEOUT 900)
 endif()

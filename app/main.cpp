@@ -1,8 +1,9 @@
 // Interactive 2D visibility / lighting application (GLFW + Dear ImGui + OpenGL3).
 //   vis_app [--size WxH] [--scene demo|scatter|maze|long|cluster] [--walls N] [--seed S]
 //           [--mode brute|grid] [--overlay off|grid|probe|rays] [--light x,y] [--compare]
-//           [--capture file.bmp [--frames N]] [--script file]
-// Capture and script runs use a hidden window and no vsync.
+//           [--tour] [--capture file.bmp [--frames N]] [--script file]
+// Capture and script runs use a hidden window and no vsync. The guided tour starts by itself in a
+// plain interactive launch (no scene/mode/overlay/light flags); --tour starts it explicitly.
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -31,6 +32,8 @@ struct Options {
     bool hasLight = false;
     double lightX = 0, lightY = 0;
     bool compare = false;
+    bool tour = false;
+    bool customStart = false;  // any flag that picks the starting state
     std::string capturePath, scriptPath;
     int frames = 3;
 };
@@ -39,6 +42,8 @@ bool parseArgs(int argc, char** argv, Options& o) {
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
         const auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : std::string(); };
+        if (a == "--scene" || a == "--walls" || a == "--seed" || a == "--mode" || a == "--overlay" || a == "--light" || a == "--compare")
+            o.customStart = true;
         if (a == "--size") {
             if (std::sscanf(next().c_str(), "%dx%d", &o.width, &o.height) != 2) return false;
         } else if (a == "--scene") {
@@ -67,6 +72,7 @@ bool parseArgs(int argc, char** argv, Options& o) {
             if (std::sscanf(next().c_str(), "%lf,%lf", &o.lightX, &o.lightY) != 2) return false;
             o.hasLight = true;
         } else if (a == "--compare") o.compare = true;
+        else if (a == "--tour") o.tour = true;
         else if (a == "--capture") o.capturePath = next();
         else if (a == "--frames") o.frames = std::max(1, std::atoi(next().c_str()));
         else if (a == "--script") o.scriptPath = next();
@@ -114,7 +120,7 @@ int main(int argc, char** argv) {
         std::fprintf(stderr,
                      "usage: vis_app [--size WxH] [--scene demo|scatter|maze|long|cluster] [--walls N] [--seed S]\n"
                      "               [--mode brute|grid] [--overlay off|grid|probe|rays] [--light x,y] [--compare]\n"
-                     "               [--capture file.bmp [--frames N]] [--script file]\n");
+                     "               [--tour] [--capture file.bmp [--frames N]] [--script file]\n");
         return 2;
     }
     const bool headless = !opt.capturePath.empty() || !opt.scriptPath.empty();
@@ -129,6 +135,10 @@ int main(int argc, char** argv) {
         return 1;
     }
     glfwSetWindowSizeLimits(window, 900, 600, GLFW_DONT_CARE, GLFW_DONT_CARE);
+    GLFWcursor* cursors[5] = {glfwCreateStandardCursor(GLFW_ARROW_CURSOR), glfwCreateStandardCursor(GLFW_POINTING_HAND_CURSOR),
+                              glfwCreateStandardCursor(GLFW_RESIZE_ALL_CURSOR), glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR),
+                              glfwCreateStandardCursor(GLFW_IBEAM_CURSOR)};
+    GLFWcursor* shownCursor = nullptr;
     glfwMakeContextCurrent(window);
     glfwSwapInterval(headless ? 0 : 1);
 
@@ -136,6 +146,7 @@ int main(int argc, char** argv) {
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr;  // no imgui.ini in the working directory
+    if (!headless) io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;  // the loop below picks the cursor
     float sx = 1.0f, sy = 1.0f;
     glfwGetWindowContentScale(window, &sx, &sy);
     App app;
@@ -152,6 +163,7 @@ int main(int argc, char** argv) {
     app.loadScene(opt.scene);
     if (opt.hasLight) app.setLight({opt.lightX, opt.lightY});
     app.status.clear();
+    if (opt.tour || (!headless && !opt.customStart)) app.tourStart();
 
     int exitCode = 0;
     Script script;
@@ -173,7 +185,18 @@ int main(int argc, char** argv) {
         app.frame(io, ImGui::GetTime());
         drawCanvas(ImGui::GetBackgroundDrawList(), app);
         app.drawPanel();
+        app.drawTourCard();
         app.drawStatusLine();
+        if (!headless) {
+            // Over the canvas the app decides (hand over the light, crosshair where a click starts a wall);
+            // over the panel or the tour card ImGui's own cursor applies (text caret in a field).
+            GLFWcursor* want = cursors[static_cast<int>(app.cursor)];
+            if (app.cursor == Cursor::Arrow && ImGui::GetMouseCursor() == ImGuiMouseCursor_TextInput) want = cursors[4];
+            if (want != shownCursor) {
+                glfwSetCursor(window, want);
+                shownCursor = want;
+            }
+        }
         ImGui::Render();
 
         int fbw = 0, fbh = 0;
@@ -203,6 +226,7 @@ int main(int argc, char** argv) {
     } else if (scripted) {
         std::printf("script ok\n");
     }
+    for (GLFWcursor* c : cursors) glfwDestroyCursor(c);
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();

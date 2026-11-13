@@ -1,25 +1,77 @@
-# Produces the review captures under build/captures (run from the project root).
+# Produces the review captures under build/captures (run from the project root; BMP, convert to PNG afterwards).
+# 1. first view: demo room, tour card on step 1
+set tour on
+wait 6
+capture build/captures/simple_demo.bmp
+
+# nudge the light once: the "Drag me" hint goes away, as it does for a real user
+wmove 610 290
+down left
+wmove 611 291
+up left
+wait 2
+
+# 2. tour step 4 ("Check every wall"), reached by clicking Next three times
+move @Next
+down left
+up left
 wait 3
-capture build/captures/demo_default.bmp
+move @Next
+down left
+up left
+wait 3
+move @Next
+down left
+up left
+wait 3
+wmove 1100 300
+wait 4
+capture build/captures/tour_step4.bmp
+move @Close
+down left
+up left
+wait 3
+
+# 3. follow one ray, grid and baseline
+set mode grid
+key R
+wait 3
 set overlay probe
 wmove 1100 300
-wait 3
-capture build/captures/demo_probe_grid.bmp
+wait 4
+capture build/captures/simple_follow_ray_grid.bmp
 set mode brute
-wait 3
-capture build/captures/demo_probe_baseline.bmp
+wait 4
+capture build/captures/simple_follow_ray_baseline.bmp
 set mode grid
+
+# 4. engine details with the probe numbers
+set detail details
+wait 3
+capture build/captures/details_demo.bmp
+set detail simple
+set overlay off
+
+# 5. the work meter on a friendly and an unfriendly scene
+key 1
+wait 6
+capture build/captures/simple_scatter_meter.bmp
+key 4
+wait 6
+capture build/captures/simple_cluster_meter.bmp
+
+# 6. stress scenes with the grid overlay
 set overlay grid
 key 1
-wait 5
+wait 6
 capture build/captures/stress_scatter_grid.bmp
 key 2
-wait 5
+wait 6
 capture build/captures/stress_maze_grid.bmp
 key 3
-wait 5
+wait 6
 capture build/captures/stress_long_grid.bmp
 key 4
-wait 5
+wait 6
 capture build/captures/stress_cluster_grid.bmp
 quit
