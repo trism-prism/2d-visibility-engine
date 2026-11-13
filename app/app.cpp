@@ -6,6 +6,7 @@
 #include <cstring>
 #include <vector>
 
+#include "legend.h"
 #include "widgets.h"
 
 using vis::Vec2;
@@ -553,6 +554,11 @@ std::string App::field(const std::string& name) const {
     if (name == "light_hint") return lightMoved ? "no" : "yes";
     if (name == "caption") return overlayCaption();
     if (name == "cursor") return cursor == Cursor::Hand ? "hand" : cursor == Cursor::Move ? "move" : cursor == Cursor::Cross ? "cross" : "arrow";
+    if (name == "legend_pair") {  // state of the two-colour legend row: "none" (not listed), "full" or "dim"
+        for (const LegendRow& row : buildLegend(*this, false).rows)
+            if (row.sw == Swatch::DotPair) return row.dim ? "dim" : "full";
+        return "none";
+    }
     if (name == "probe_cells" || name == "probe_walls" || name == "probe_tminus" || name == "probe_tplus") {
         const vis::Trace::RayRecord* r = probe();
         if (!r) return "none";

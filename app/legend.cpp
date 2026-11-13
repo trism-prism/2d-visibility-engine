@@ -49,7 +49,12 @@ LegendModel buildLegend(const App& app, bool condensed) {
                 m.rows.push_back({Swatch::Square, ui::kCyan, "Squares it crossed, numbered in order"});
             }
             m.rows.push_back({Swatch::Dot, ui::kGold, "Where the ray hits a wall"});
-            m.rows.push_back({Swatch::DotPair, 0, "Two colours: the two sides of the ray end at different walls"});
+            {
+                // Same test render.cpp uses to draw one gold marker instead of a green and a pink one.
+                const vis::Trace::RayRecord* p = app.probe();
+                const bool merged = p != nullptr && p->tMinus == p->tPlus;
+                m.rows.push_back({Swatch::DotPair, 0, "Two colours: the two sides of the ray end at different walls", merged});
+            }
             break;
         case Overlay::Rays:
             m.title = "Every ray";
@@ -83,6 +88,10 @@ void drawLegend(ImDrawList* dl, const App& app, const LegendModel& m, ImVec2 lo,
         const LegendRow& r = m.rows[i];
         const float cy = y + px * 0.6f;
         const float sx = lo.x + pad;
+        const int fade = r.dim ? 90 : 255;  // alpha of everything in a dimmed row
+        const auto faded = [fade](ImU32 c) {
+            return (c & 0x00FFFFFFu) | (static_cast<ImU32>(((c >> IM_COL32_A_SHIFT) & 0xFFu) * static_cast<ImU32>(fade) / 255u) << IM_COL32_A_SHIFT);
+        };
         switch (r.sw) {
             case Swatch::None: break;
             case Swatch::Line: dl->AddLine({sx, cy}, {sx + 16.0f * ui, cy}, r.col, 3.0f * ui); break;
@@ -92,8 +101,8 @@ void drawLegend(ImDrawList* dl, const App& app, const LegendModel& m, ImVec2 lo,
                 break;
             case Swatch::Dot: dl->AddCircleFilled({sx + 7.0f * ui, cy}, 4.5f * ui, r.col, 14); break;
             case Swatch::DotPair:
-                dl->AddCircleFilled({sx + 4.0f * ui, cy}, 4.0f * ui, ui::kGreen, 14);
-                dl->AddCircleFilled({sx + 14.0f * ui, cy}, 4.0f * ui, ui::kPink, 14);
+                dl->AddCircleFilled({sx + 4.0f * ui, cy}, 4.0f * ui, faded(ui::kGreen), 14);
+                dl->AddCircleFilled({sx + 14.0f * ui, cy}, 4.0f * ui, faded(ui::kPink), 14);
                 break;
             case Swatch::Heat:
                 for (int k = 0; k < 3; ++k)
@@ -103,7 +112,7 @@ void drawLegend(ImDrawList* dl, const App& app, const LegendModel& m, ImVec2 lo,
         }
         const bool none = r.sw == Swatch::None;
         const float tx = lo.x + pad + (none ? 0.0f : swW);
-        dl->AddText(font, px, {tx, y}, IM_COL32(204, 212, 230, 255), r.text.c_str(), nullptr, wrap - (none ? 0.0f : swW));
+        dl->AddText(font, px, {tx, y}, faded(IM_COL32(204, 212, 230, 255)), r.text.c_str(), nullptr, wrap - (none ? 0.0f : swW));
         y += rowHeight(app, r, wrap, i == 0) + kRowGap * ui;
     }
 }

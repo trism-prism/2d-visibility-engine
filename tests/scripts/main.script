@@ -204,6 +204,19 @@ expect mode == grid
 key R
 wait 2
 expect walls == 55
+
+# --- legend: the two-colour row is dimmed while both sides of the probed ray end at the same wall
+# (demo room, light at 610,290, grid mode, probe overlay)
+wmove 1100 300
+wait 4
+save pplus probe_tplus
+expect probe_tminus == $pplus
+expect legend_pair == dim
+wmove 900 200
+wait 4
+save pplus probe_tplus
+expect probe_tminus != $pplus
+expect legend_pair == full
 set overlay off
 wait 2
 
