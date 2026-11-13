@@ -60,7 +60,7 @@ void compareTable(App& app) {
     ImGui::SameLine();
     ImGui::TextColored(app.identical ? ImVec4(0.45f, 0.9f, 0.55f, 1) : ImVec4(1, 0.4f, 0.4f, 1), app.identical ? "yes" : "NO");
     cardTextSmall(app, kTextDim,
-                  "Both run on every update, timed separately. Overlay and meter passes don't count.");
+                  "Both run every update, timed separately; overlay and meter passes don't count.");
 }
 
 }  // namespace
