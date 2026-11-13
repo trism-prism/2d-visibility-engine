@@ -67,7 +67,7 @@ Follow-up changes after the refresh, in the commits from "Keep the tallest Simpl
 
 ## Next step
 
-Run `.\build\release\app\vis_app.exe` and follow "Showing it to someone" and "A longer demonstration" in `README.md` by hand. If crossing-heavy scenes need to be interactive, the angular-sweep alternative in `docs/DECISIONS.md` is the change to evaluate.
+Run `.\build\release\app\vis_app.exe` and try it by hand (the tour in the app, then [docs/APP.md](docs/APP.md)). If crossing-heavy scenes need to be interactive, the angular-sweep alternative in `docs/DECISIONS.md` is the change to evaluate.
 
 ## Commands
 
