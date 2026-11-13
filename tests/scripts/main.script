@@ -235,7 +235,7 @@ wait 4
 save pplus probe_tplus
 expect probe_tminus == $pplus
 expect legend_pair == dim
-wmove 900 200
+wmove 700 100
 wait 4
 save pplus probe_tplus
 expect probe_tminus != $pplus

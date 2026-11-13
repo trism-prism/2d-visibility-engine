@@ -69,7 +69,7 @@ The cost of the grid depends on how many walls share the cells a ray visits and 
 
 - **Many walls in few cells.** Cluster n=250: Grid is 1.5x to 1.8x faster than Brute (three seeds), with 186-241 walls in the busiest cell; a ray entering the patch tests most of its walls.
 - **Few walls.** Scatter n=16: 1.11x to 1.13x. The scene has no crossings and 36 targets, and the walk's setup is comparable to the work saved.
-- **The sort is not reduced by the grid.** `O(T log T)` exact comparisons are the same in both modes. In Scatter and Maze rows the Grid sort time exceeds its cast time; for Scatter n=1000, seed 1 the sort is 412 us of the 670 us Grid median.
+- **The sort is not reduced by the grid.** `O(T log T)` exact comparisons are the same in both modes. In Scatter and Maze rows the Grid sort time exceeds its cast time; for Scatter n=1000, seed 1 the sort is 412 us of the 670 us Grid median (committed results, produced before the sort got a cached-difference filter; see ARCHITECTURE.md).
 - **The number of rays is set by T.** Long walls (two families of near-parallel long walls) has many crossings: at n=1000, k = 22,486 and T = 24,490 (three-seed medians), and each target gets a ray whether or not it is visible. The grid cuts the wall tests per ray but not the rays.
 
 ## 7. Where each claim is tested

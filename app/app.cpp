@@ -361,7 +361,7 @@ void App::refreshGridInfo() {
 void App::updateVisibility() {
     refreshGridInfo();
     if (!dirty && settle <= 0) return;
-    const bool moving = dirty;  // this update follows a change (the light or the scene)
+    const bool moving = dirty;  // this update follows a change (light, scene, method, overlay...)
     if (dirty) settle = 8;  // repeat a few frames: more real samples for the median
     else --settle;
     dirty = false;
@@ -399,7 +399,7 @@ void App::updateVisibility() {
     }
     // Slow updates (over 50 ms) need no repeats for the median; one more update is enough to finish the
     // meter. Without this a heavy scene keeps the app busy for 8 full updates after every change.
-    if (result.stats.totalUs > 50'000.0) settle = std::min(settle, 1);
+    if (std::max(result.stats.totalUs, haveOther ? otherResult.stats.totalUs : 0.0) > 50'000.0) settle = std::min(settle, 1);
     polyHash = fnv(result.polygon);
     updateMeter(moving);
 
