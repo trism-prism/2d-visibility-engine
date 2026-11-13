@@ -42,7 +42,7 @@ wait 2
 log
 expect walls == 56
 expect poly_hash != $poly1
-expect status has Wall added
+expect status has Added
 
 # --- zero-length wall (press and release without moving) is rejected
 wmove 1300 600
@@ -51,7 +51,7 @@ up left
 wait 2
 log
 expect walls == 56
-expect status has too short
+expect status has Too short
 
 # --- right-click deletes the wall just drawn
 wmove 900 630
@@ -60,7 +60,7 @@ up right
 wait 2
 log
 expect walls == 55
-expect status has Wall removed
+expect status has Removed
 
 # --- right-click on a boundary wall: nothing is deleted, the status line says so
 wmove 800 0
@@ -69,7 +69,7 @@ up right
 wait 2
 log
 expect walls == 55
-expect status has The outer walls can't be removed
+expect status has Outer walls stay
 
 # --- a user wall on the world edge (within a fraction of a pixel of the boundary wall) is deletable:
 # user walls are picked before the boundary wall next to them. (The exact tie is tested further down.)
@@ -86,7 +86,7 @@ up right
 wait 2
 log
 expect walls == 55
-expect status has Wall removed
+expect status has Removed
 
 # --- exact tie: a user wall drawn with Shift from corner to corner snaps onto the top boundary wall
 # (same end points). The user wall is picked first, so one right-click removes it; the next click
@@ -105,12 +105,12 @@ down right
 up right
 wait 2
 expect walls == 55
-expect status has Wall removed
+expect status has Removed
 down right
 up right
 wait 2
 expect walls == 55
-expect status has The outer walls can't be removed
+expect status has Outer walls stay
 
 # --- clicking on the panel (empty area and a button) must not create a wall
 save poly2 poly_hash
@@ -125,7 +125,7 @@ down left
 up left
 wait 2
 log
-expect status has Demo room loaded
+expect status has Demo loaded
 expect walls == 55
 expect light_x == 610
 
@@ -286,7 +286,7 @@ wait 3
 # --- Simple / Engine details toggle; Simple fits at 1280x800 without scrolling
 expect detail == simple
 expect panel_overflow == no
-move @Engine details
+move @Engine
 down left
 up left
 wait 4
@@ -310,7 +310,7 @@ expect meter_walls == $ww
 expect meter_source == measured
 save wtg wall_tests
 expect meter_grid == $wtg
-expect meter_verdict has of the work here
+expect meter_verdict has of the work
 print rays walls_total meter_rays meter_walls meter_baseline meter_grid meter_source meter_verdict query_median_us
 save g meter_grid
 save lxm light_x
@@ -336,7 +336,7 @@ expect meter_grid == $g
 print rays walls_total meter_baseline meter_grid meter_source
 
 # --- the same on a 1000-wall scene, driven by the scene card
-move @Scattered walls
+move @Scatter
 down left
 up left
 wait 5
@@ -357,14 +357,14 @@ print scene rays walls_total meter_baseline meter_grid meter_source meter_verdic
 key Tab
 wait 3
 
-# --- slow-scene note: Long walls under "Check every wall"
+# --- slow-scene note: Long walls under "All walls"
 set mode brute
 key 3
 wait 4
 expect scene == longwalls
 expect slow_note == yes
 expect slow_ms > 30
-expect slow_text has Slow with
+expect slow_text has slow here
 # heavy scene: the grid figure is measured by one extra pass once the light has stopped
 expect meter_source == extra_pass
 expect meter_grid != unknown
@@ -398,19 +398,19 @@ wait 3
 # --- plain-language captions come from real data
 set overlay grid
 wait 3
-expect caption has squares. Brighter squares were crossed by more rays
+expect caption has Brighter = more rays
 set overlay probe
 wmove 800 300
 wait 3
-expect caption has This one crossed
-expect caption has walls.
+expect caption has Crosses
+expect caption has of 59 walls
 set mode brute
 wait 3
-expect caption has This one had to test all 59 walls
+expect caption has Tests all 59 walls
 set mode grid
 set overlay rays
 wait 3
-expect caption has rays, one aimed at each direction
+expect caption has rays: one per wall end
 set overlay off
 wait 2
 
@@ -427,7 +427,7 @@ expect cursor == arrow
 
 # --- tour: not auto-started under --script, opened by the button, Next / Back / Close
 expect tour == off
-move @Take the tour
+move @Tour
 down left
 up left
 wait 4
@@ -493,7 +493,7 @@ up left
 wait 3
 expect tour == off
 # Close button and Esc
-move @Take the tour
+move @Tour
 down left
 up left
 wait 4

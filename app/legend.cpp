@@ -13,7 +13,7 @@ float rowHeight(const App& app, const LegendRow& r, float wrap, bool caption) {
     const float px = kPx * app.uiScale;
     const float w = wrap - (r.sw == Swatch::None ? 0.0f : kSwatchW * app.uiScale);
     float h = std::max(app.uiFont->CalcTextSizeA(px, FLT_MAX, w, r.text.c_str()).y, px);
-    if (caption) h = std::max(h, 2.0f * px * 1.2f);  // always room for two lines: the height never jumps
+    if (caption) h = std::max(h, px * 1.2f);  // captions are one short line; the height only changes if one wraps
     return h;
 }
 
@@ -29,37 +29,37 @@ LegendModel buildLegend(const App& app, bool condensed) {
     switch (app.overlay) {
         case Overlay::Off: break;
         case Overlay::Grid:
-            m.title = "The grid";
+            m.title = "Squares";
             if (condensed) break;
             if (grid) {
                 std::uint32_t mx = 0;
                 for (std::uint32_t v : app.trace.cellVisits) mx = std::max(mx, v);
-                m.rows.push_back({Swatch::Heat, 0, "Brighter square: more rays crossed it (busiest: " + ui::fmtInt(mx) + ")"});
-                m.rows.push_back({Swatch::Dot, IM_COL32(190, 200, 225, 220), "A dot marks a square that holds at least one wall"});
+                m.rows.push_back({Swatch::Heat, 0, "Brighter = more rays (max " + ui::fmtInt(mx) + ")"});
+                m.rows.push_back({Swatch::Dot, IM_COL32(190, 200, 225, 220), "Dot: square holds a wall"});
             } else {
                 m.rows.push_back({Swatch::Line, IM_COL32(120, 210, 255, 220), "One ray"});
             }
             break;
         case Overlay::Probe:
-            m.title = "Follow one ray";
+            m.title = "One ray";
             if (condensed) break;
-            m.rows.push_back({Swatch::Line, ui::kAmber, grid ? "Walls this ray had to test" : "Every wall is tested"});
+            m.rows.push_back({Swatch::Line, ui::kAmber, grid ? "Tested walls" : "All walls tested"});
             if (grid) {
-                m.rows.push_back({Swatch::Line, IM_COL32(120, 128, 150, 255), "Walls it skipped"});
-                m.rows.push_back({Swatch::Square, ui::kCyan, "Squares it crossed, numbered in order"});
+                m.rows.push_back({Swatch::Line, IM_COL32(120, 128, 150, 255), "Skipped walls"});
+                m.rows.push_back({Swatch::Square, ui::kCyan, "Squares crossed, in order"});
             }
-            m.rows.push_back({Swatch::Dot, ui::kGold, "Where the ray hits a wall"});
+            m.rows.push_back({Swatch::Dot, ui::kGold, "Hit point"});
             {
                 // Same test render.cpp uses to draw one gold marker instead of a green and a pink one.
                 const vis::Trace::RayRecord* p = app.probe();
                 const bool merged = p != nullptr && p->tMinus == p->tPlus;
-                m.rows.push_back({Swatch::DotPair, 0, "Two colours: the two sides of the ray end at different walls", merged});
+                m.rows.push_back({Swatch::DotPair, 0, "Two colours: sides hit different walls", merged});
             }
             break;
         case Overlay::Rays:
-            m.title = "Every ray";
+            m.title = "All rays";
             if (condensed) break;
-            m.rows.push_back({Swatch::Line, IM_COL32(120, 210, 255, 220), "One ray, drawn to where it stops"});
+            m.rows.push_back({Swatch::Line, IM_COL32(120, 210, 255, 220), "Ray, to where it stops"});
             break;
     }
     return m;

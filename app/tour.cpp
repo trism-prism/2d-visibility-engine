@@ -21,27 +21,22 @@ struct TourStep {
 
 const TourStep kSteps[kTourSteps] = {
     {"Move the light",
-     "Drag the glowing light around. The bright area is everything it can see; walls cast shadows. It is worked out again "
-     "every time you move.",
+     "Drag the light. The bright area is what it sees.",
      vis::SceneKind::Demo, false, vis::Mode::Grid, Overlay::Off},
-    {"Change the room",
-     "Drag on empty floor to draw a wall. Right-click a wall to remove it. The lit area updates at once.",
+    {"Draw walls",
+     "Drag on the floor to draw. Right-click a wall to erase.",
      vis::SceneKind::Demo, false, vis::Mode::Grid, Overlay::Off},
-    {"Follow one ray",
-     "Move your mouse over the room to pick a ray. The orange walls are the only ones this ray had to test; the grid let it "
-     "skip the rest.",
+    {"One ray",
+     "Hover to pick a ray. Orange walls are the only ones it tested.",
      vis::SceneKind::Demo, false, vis::Mode::Grid, Overlay::Probe},
-    {"Check every wall",
-     "Now the ray tests every wall, so all of them turn orange. The picture is identical — only the amount of work "
-     "changed.",
+    {"All walls",
+     "Same ray, now testing every wall. Same picture, more work.",
      vis::SceneKind::Demo, false, vis::Mode::Brute, Overlay::Probe},
-    {"A bigger room",
-     "Here are 1,000 short walls. Look at the work meter on the right: with the grid, the engine needs only a small fraction "
-     "of the checks.",
+    {"More walls",
+     "1,000 walls. The meter shows the grid doing a fraction of the work.",
      vis::SceneKind::Scatter, true, vis::Mode::Grid, Overlay::Off},
-    {"Where the grid helps least",
-     "Now everything is packed into one corner, so rays keep crossing the same crowded squares. The grid still helps, but "
-     "saves less here. Explore freely.",
+    {"Worst case",
+     "Walls packed in one corner. The grid helps less. Explore.",
      vis::SceneKind::Cluster, true, vis::Mode::Grid, Overlay::Off},
 };
 
@@ -104,7 +99,7 @@ void App::drawTourCard() {
     {
         FontScope f(*this, 12.5f);
         char b[48];
-        std::snprintf(b, sizeof b, "Step %d of %d", tourStep + 1, kTourSteps);
+        std::snprintf(b, sizeof b, "%d / %d", tourStep + 1, kTourSteps);
         ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(kCyan));
         ImGui::TextUnformatted(b);
         ImGui::PopStyleColor();
@@ -142,7 +137,7 @@ void App::drawTourCard() {
     ImGui::SameLine();
     ImGui::SetCursorPosX(left + inner - 70.0f * ui);
     if (button(*this, "Close", {70.0f * ui, 0})) tourClose();
-    tooltip("Esc also closes the tour. “Take the tour” in the panel reopens it.");
+    tooltip("Esc closes. “Tour” in the panel reopens.");
 
     tourCardMin = ImGui::GetWindowPos();
     const ImVec2 sz = ImGui::GetWindowSize();

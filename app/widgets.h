@@ -12,8 +12,8 @@
 namespace ui {
 
 // ---- colours shared by the panel and the canvas ----
-constexpr ImU32 kAmber = IM_COL32(255, 168, 64, 255);   // "Check every wall" / tested walls
-constexpr ImU32 kCyan = IM_COL32(94, 196, 255, 255);    // "Use the grid" / accent
+constexpr ImU32 kAmber = IM_COL32(255, 168, 64, 255);   // "All walls" / tested walls
+constexpr ImU32 kCyan = IM_COL32(94, 196, 255, 255);    // "Grid" / accent
 constexpr ImU32 kGreen = IM_COL32(120, 255, 170, 255);  // tMinus marker
 constexpr ImU32 kPink = IM_COL32(255, 130, 220, 255);   // tPlus marker
 constexpr ImU32 kGold = IM_COL32(255, 230, 120, 255);   // both sides agree
