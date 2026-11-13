@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-12. All five stages are complete; the required scope is delivered.
+Last updated: 2026-11-13. All five stages are complete; the required scope is delivered. The demo interface was redesigned on 2026-11-13 (section below).
 
 ## Acceptance
 
@@ -18,6 +18,20 @@ Last updated: 2026-11-12. All five stages are complete; the required scope is de
 | Release benchmark | passed | `bench/results/results.csv` (66 rows), `grid_sweep.csv` (10 rows), `results.meta.txt`; 1340 s run; see `docs/BENCHMARK.md` |
 | Independent review | done | One review pass; 15 findings, all accepted and fixed (1 high: stale probe index; 4 medium) |
 
+## UI refresh (2026-11-13)
+
+The desktop interface was redesigned for a first-time viewer (commit "Refresh the demo UI for newcomers"): Simple and Engine details levels, method cards ("Check every wall" = Baseline, "Use the grid" = Grid), renamed overlays, a work meter, scene cards with a wall-count slider, a legend, a six-step guided tour that starts on a plain launch, and cursor feedback. The reasoning is decision 12 in `docs/DECISIONS.md`; the behaviour is described in `README.md`. `core/`, `bench/` and the benchmark results were not touched by it.
+
+| Check | Result | Evidence |
+|---|---|---|
+| Release tests | passed | `.\scripts\dev.ps1 ctest --preset release`, run again on 2026-11-13: 3/3 (`bench_quick` 1.13 s, `vis_tests` 14.37 s, `app_script` 26.03 s) |
+| `vis_tests` unchanged | passed | `build/release/tests/vis_tests.exe`, run again on 2026-11-13: 60 cases, 757,017 assertions, 0 failed |
+| Debug tests | reported, not rerun | 3/3 with the `app_script` timeout raised to 900 s (`app/CMakeLists.txt`); taken from the hand-over for this change, not rerun for this update |
+| Work meter | passed by script | `tests/scripts/main.script`: Baseline figure equals rays x walls, the grid figure equals what Grid mode reports, the extra pass and the skip path, on the demo room and a 1,000-wall scene |
+| Screenshots | viewed | `docs/images` are captures from `tests/scripts/captures.script` (`build/captures`), viewed before use |
+
+Not checked in this refresh: hands-on use with a physical mouse and keyboard (the script injects events into ImGui, so the real OS cursor shape is never exercised; the `cursor` field only shows what the application asked for), other displays and DPI settings, and whether a person seeing it for the first time understands the meter.
+
 ## Known limitations
 
 - Verified on one machine only (Windows 11, MSVC 19.44, Intel Iris Xe). Other platforms and compilers are untested.
@@ -30,12 +44,12 @@ Last updated: 2026-11-12. All five stages are complete; the required scope is de
 
 ## Not checked
 
-- Hands-on use with a physical mouse and keyboard, high-DPI displays, multi-monitor, window sizes above the screen size.
+- Hands-on use with a physical mouse and keyboard (including the new cursor shapes), high-DPI displays, multi-monitor, window sizes above the screen size.
 - The app under AddressSanitizer.
 
 ## Next step
 
-Run `.\build\release\app\vis_app.exe` and follow the demonstration sequence in `README.md` by hand. If crossing-heavy scenes need to be interactive, the angular-sweep alternative in `docs/DECISIONS.md` is the change to evaluate.
+Run `.\build\release\app\vis_app.exe` and follow "Showing it to someone" and "A longer demonstration" in `README.md` by hand. If crossing-heavy scenes need to be interactive, the angular-sweep alternative in `docs/DECISIONS.md` is the change to evaluate.
 
 ## Commands
 
