@@ -41,6 +41,12 @@ inline bool operator==(const Segment& s, const Segment& t) { return s.a == t.a &
 // This is the only source of combinatorial decisions (angular order, side of a ray).
 int orient(Vec2 a, Vec2 b, Vec2 c);
 
+// Shewchuk's ccwerrboundA = (3 + 16 eps) eps with eps = 2^-53: when |det| exceeds this fraction of
+// |l|+|r|, the sign of the floating-point det = l - r (l, r from rounded differences and products)
+// is guaranteed to be the exact sign. `orient` uses it; the angular sort applies the same test to
+// differences it has already computed and falls back to `orient` when it is inconclusive.
+constexpr double kOrientErrBound = (3.0 + 16.0 * 1.1102230246251565e-16) * 1.1102230246251565e-16;
+
 // Counter-clockwise order of directions around `l` as a strict weak ordering: first the half-turn
 // (p.y > l.y, or p.y == l.y && p.x > l.x, comes first), then orient(l, p, q) > 0. Targets equal to
 // `l` must be excluded by the caller. Equivalent elements lie on the same ray exactly.

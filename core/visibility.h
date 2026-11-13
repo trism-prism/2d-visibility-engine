@@ -55,6 +55,7 @@ struct VisibilityContext {
     struct SortItem {
         std::uint32_t target;
         int half;  // halfTurn(light, target), cached for the comparator
+        double dx, dy;  // target - light, the same differences orient() starts from
     };
     std::vector<SortItem> items;
     std::vector<Ray> rays;
