@@ -341,9 +341,12 @@ wait 4
 expect scene == longwalls
 expect slow_note == yes
 expect slow_ms > 30
-expect slow_text has slow with
+expect slow_text has Slow with
 expect meter_source == skipped
 expect meter_grid == unknown
+# the tallest Simple panel (slow note plus "not measured") still fits 1280 x 800 with room to spare
+expect panel_overflow == no
+expect panel_slack > 15
 save prod3 rays_x_walls
 expect meter_baseline == $prod3
 print scene slow_ms slow_text meter_baseline meter_source meter_verdict

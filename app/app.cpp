@@ -453,10 +453,7 @@ void App::updateMeter() {
 
 std::string App::slowNote() const {
     if (!slowBaseline) return {};
-    std::string s = "This scene is slow with \u201CCheck every wall\u201D \u2014 about " + ui::fmtNum(baselineEstMs, 0) +
-                    " ms per update.";
-    if (mode == vis::Mode::Brute) s += " Switch to \u201CUse the grid\u201D to keep it smooth.";
-    return s;
+    return "Slow with \u201CCheck every wall\u201D: about " + ui::fmtNum(baselineEstMs, 0) + " ms per update.";
 }
 
 std::string App::overlayCaption() const {
