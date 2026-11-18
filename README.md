@@ -2,6 +2,8 @@
 
 Exact hard shadows for a point light among line-segment walls. C++20, with an interactive demo.
 
+![Short demo: dragging the light, drawing walls, the two methods and the four scenes](docs/media/demo_short.gif)
+
 ![Demo room: a light, walls, and the area the light can see](docs/images/simple_demo.png)
 
 - **Exact** No angle nudging or epsilon tricks. Every side-of-line test uses exact arithmetic.
