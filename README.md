@@ -87,6 +87,7 @@ Tests, benchmarks and platform notes: [docs/RUNNING.md](docs/RUNNING.md).
 | | |
 |---|---|
 | [Demo guide](docs/APP.md) | All panels, the work meter, and the tour |
+| [Videos](docs/media/README.md) | A five-minute walkthrough and the short demo |
 | [Running](docs/RUNNING.md) | Build, test, run, benchmark, flags, scripts |
 | [Architecture](docs/ARCHITECTURE.md) | Algorithms and code layout |
 | [Walkthrough](docs/WALKTHROUGH.md) | Step by step walkthrough |

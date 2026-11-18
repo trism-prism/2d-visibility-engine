@@ -1,8 +1,7 @@
 # Produces the review captures under build/captures (run from the project root; BMP, convert to PNG afterwards).
-# 1. first view: demo room, tour card on step 1
+# 1. open the tour on the demo room (step 2 below walks it to step 4)
 set tour on
 wait 6
-capture build/captures/simple_demo.bmp
 
 # nudge the light once: the "Drag me" hint goes away, as it does for a real user
 wmove 610 290
