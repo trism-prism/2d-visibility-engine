@@ -32,12 +32,12 @@ const TourStep kSteps[kTourSteps] = {
     {"All walls",
      "Now it checks every wall: same picture, more work.",
      vis::SceneKind::Demo, false, vis::Mode::Brute, Overlay::Probe},
-    {"More walls",
-     "With 1,000 walls the grid does a fraction of the work.",
-     vis::SceneKind::Scatter, true, vis::Mode::Grid, Overlay::Off},
-    {"Worst case",
-     "Everything is bunched in one corner, so the grid helps less.",
-     vis::SceneKind::Cluster, true, vis::Mode::Grid, Overlay::Off},
+    {"A forest",
+     "1,000 walls of trees, spread out. Each ray passes only a few, so the grid does a fraction of the work.",
+     vis::SceneKind::Forest, true, vis::Mode::Grid, Overlay::Off},
+    {"A storeroom",
+     "The same 1,000 walls, as crates crammed into one spot. They pile into a few squares, so the grid saves much less.",
+     vis::SceneKind::Storeroom, true, vis::Mode::Grid, Overlay::Off},
 };
 
 }  // namespace

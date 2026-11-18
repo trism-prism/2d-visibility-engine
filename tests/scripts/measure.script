@@ -1,4 +1,5 @@
-# Live-app measurements at n = 1000 for each stress scene, both back ends (Compare on).
+# Live-app measurements at a size of 1000 for each scene on keys 1-4 (Forest, Dungeon, Crisscross,
+# Storeroom), both back ends (Compare on).
 # Query numbers are medians of the last <= 60 real timed queries per back end.
 set compare on
 set walls 1000

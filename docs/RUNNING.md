@@ -68,7 +68,7 @@ To build without GLFW and Dear ImGui (core, tests, benchmark only):
 ## Command-line flags
 
 ```
-vis_app [--size WxH] [--scene demo|scatter|maze|long|cluster] [--walls N] [--seed S]
+vis_app [--size WxH] [--scene demo|forest|dungeon|crisscross|storeroom|scatter|maze|long|cluster] [--walls N] [--seed S]
         [--mode brute|grid] [--overlay off|grid|probe|rays] [--light x,y] [--compare]
         [--tour] [--capture file.bmp [--frames N]] [--script file]
 ```
@@ -76,7 +76,8 @@ vis_app [--size WxH] [--scene demo|scatter|maze|long|cluster] [--walls N] [--see
 | Flag | Notes |
 |---|---|
 | `--mode brute` / `--mode grid` | `brute` selects "All walls" (Baseline), `grid` selects "Grid" |
-| `--walls N` | Clamped to 100-5000 |
+| `--walls N` | Clamped to 100-5000. Ignored by `demo` and `dungeon`, which have fixed layouts |
+| `--scene` | `forest`, `dungeon`, `crisscross` and `storeroom` are the panel's scenes. `scatter`, `maze`, `long` and `cluster` are the benchmark's stress layouts. In scripted and capture runs, walking moves a fixed 1/60 s per frame |
 | `--size WxH` | Clamped to 400-7680 by 300-4320. The window can't be resized below 900 x 600. Both are scaled by the display's DPI scale in interactive runs; headless runs stay at 100% |
 | `--tour` | Opens the guided tour (it starts by itself only in a plain interactive launch, see [APP.md](APP.md)) |
 | `--capture file.bmp [--frames N]` | Renders N frames (default 3), writes a 24-bit BMP (parent directories are created) and exits |
@@ -99,7 +100,7 @@ I haven't tested with a physical mouse by hand.
 
 | Group | Commands |
 |---|---|
-| Mouse and keys | `shift on\|off` (hold Shift, which snaps a drawn wall to existing end points); `move X Y`; `move @Button Label` (the centre of a panel or tour-card button, for example `move @Engine` or `move @Next`); `wmove X Y` (world coordinates through the app's transform); `down\|up left\|right`; `key Tab\|R\|C\|O\|M\|1\|2\|3\|4\|Escape`; `wait N` (frames) |
+| Mouse and keys | `shift on\|off` (hold Shift, which snaps a drawn wall to existing end points); `move X Y`; `move @Button Label` (the centre of a panel or tour-card button, for example `move @Engine` or `move @Next`); `wmove X Y` (world coordinates through the app's transform); `down\|up left\|right`; `key Tab\|R\|C\|O\|M\|1\|2\|3\|4\|Escape\|Left\|Right\|Up\|Down`; `hold KEY on\|off` (keep a key down across frames, for walking the light); `wait N` (frames) |
 | Output | `capture file.bmp`, `log`, `print FIELD...`, `quit` |
 | State | `set walls N`, `set seed N`, `set compare on\|off`, `set mode brute\|grid`, `set overlay off\|grid\|probe\|rays`, `set detail simple\|details`, `set tour on\|off` |
 | Checks | `save NAME FIELD`; `expect FIELD OP VALUE` with `OP` one of `== != < <= > >= has` (the value may be `$NAME`). The process exits non-zero if any `expect` fails |
@@ -124,7 +125,7 @@ The `FIELD` names, all handled in `App::field` (`app/app.cpp`):
 | `expect_script_load_failure.cmake` | The CTest `app_script_missing`: a missing script file must exit with code 2 and print "cannot read script" |
 | `captures.script` | Writes the review captures (the README screenshots) to `build/captures` |
 | `captures_small.script` | The 900 x 600 capture; run with `--size 900x600` |
-| `measure.script` | Prints live measurements per stress scene |
+| `measure.script` | Prints live measurements for the scenes on keys 1-4 |
 
 ## What was run
 

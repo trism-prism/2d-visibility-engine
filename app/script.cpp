@@ -18,6 +18,10 @@ ImGuiKey keyFromName(const std::string& n) {
     if (n == "3") return ImGuiKey_3;
     if (n == "4") return ImGuiKey_4;
     if (n == "Escape") return ImGuiKey_Escape;
+    if (n == "Left") return ImGuiKey_LeftArrow;
+    if (n == "Right") return ImGuiKey_RightArrow;
+    if (n == "Up") return ImGuiKey_UpArrow;
+    if (n == "Down") return ImGuiKey_DownArrow;
     return ImGuiKey_None;
 }
 
@@ -140,6 +144,16 @@ bool Script::tick(App& app, ImGuiIO& io) {
             releaseKey_ = k;  // released on the next tick
             wait_ = 3;
             return true;
+        }
+        if (op == "hold") {  // hold or release a key across frames (walking the hero)
+            const ImGuiKey k = keyFromName(arg(1));
+            if (k == ImGuiKey_None) {
+                std::printf("EXPECT FAIL line %d: unknown key %s\n", c.line, arg(1).c_str());
+                ++failures;
+                continue;
+            }
+            io.AddKeyEvent(k, arg(2) == "on");
+            continue;  // takes effect on this frame; use `wait N` to walk for N frames
         }
         if (op == "shift") {  // hold or release Shift (snaps a drawn wall's end points)
             io.AddKeyEvent(ImGuiMod_Shift, arg(1) == "on");

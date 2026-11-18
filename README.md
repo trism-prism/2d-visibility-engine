@@ -7,7 +7,7 @@ Exact hard shadows for a point light among line-segment walls. C++20, with an in
 - **Exact** No angle nudging or epsilon tricks. Every side-of-line test uses exact arithmetic.
 - **Two methods but one result** A simple one and a faster one give bit-identical output.
 - **Easy to use** Drag the light, draw walls, and watch how much work each method has to do.
-- **Tested** 60 test cases with about 300 assertions.
+- **Tested** 58 test cases with about 350 assertions.
 
 ## How it works
 
@@ -32,14 +32,14 @@ Two levels, switched at the top of the panel: **Simple** (plain words) and **Eng
 
 | Simple | Engine |
 |---|---|
-| ![Simple level](docs/images/simple_scatter_meter.png) | ![Engine level](docs/images/details_demo.png) |
+| ![Simple level](docs/images/simple_forest_meter.png) | ![Engine level](docs/images/details_demo.png) |
 
 | Panel | Does |
 |---|---|
 | **Method** | Pick *All walls* or *Grid*. |
 | **Show** | *Light only*, *Squares* (rays per grid square), *One ray* (follow the ray under the cursor), *All rays*. |
 | **Work** | Counts wall tests per method. Same picture, less work. |
-| **Scenes** | *Demo*, *Scatter*, *Maze*, *Long walls*, *Cluster*; 100-5,000 walls. |
+| **Scenes** | *Demo*, *Forest*, *Dungeon*, *Crisscross*, *Storeroom*. Each one says what it is and what to look for. |
 | **Tour** | Six step tour of the app that opens on first launch. |
 
 | Input | Action |
@@ -50,16 +50,17 @@ Two levels, switched at the top of the panel: **Simple** (plain words) and **Eng
 | `Tab` | Switch method |
 | `O` | Cycle *Show* |
 | `1` `2` `3` `4` | Load a scene |
+| Arrow keys / `WASD` | Walk the light around (it's the hero's torch in the Dungeon) |
 | `R` / `C` | Reset / clear walls |
 
 ### Scenes
 
-| Scatter | Maze | Long walls | Cluster |
+| Forest | Dungeon | Crisscross | Storeroom |
 |---|---|---|---|
-| ![Scatter](docs/images/stress_scatter_grid.png) | ![Maze](docs/images/stress_maze_grid.png) | ![Long walls](docs/images/stress_long_grid.png) | ![Cluster](docs/images/stress_cluster_grid.png) |
-| Where the grid shines | Closest to a real level | Both methods struggle | Where the grid helps least |
+| ![Forest](docs/images/scene_forest.png) | ![Dungeon](docs/images/scene_dungeon.png) | ![Crisscross](docs/images/scene_crisscross.png) | ![Storeroom](docs/images/scene_storeroom.png) |
+| Small trees spread out. The grid shines here | A tiny game level. You walk a little hero with a torch | A few long walls that cross a lot, so there are way more rays than walls | Crates crammed into one spot, so the grid saves much less |
 
-All the screenshots are captured at 1,000 walls (`tests/scripts/captures.script`).
+All the screenshots are real captures (`tests/scripts/captures.script`). The benchmark still uses its own four synthetic layouts, see [BENCHMARK.md](docs/BENCHMARK.md).
 
 More detail: [demo guide](docs/APP.md).
 

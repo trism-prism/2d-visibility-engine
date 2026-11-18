@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <cmath>
 #include <deque>
+#include <initializer_list>
+#include <utility>
 #include <vector>
 
 namespace vis {
@@ -60,6 +62,10 @@ const char* sceneKindName(SceneKind kind) {
         case SceneKind::Maze: return "maze";
         case SceneKind::LongWalls: return "longwalls";
         case SceneKind::Cluster: return "cluster";
+        case SceneKind::Forest: return "forest";
+        case SceneKind::Dungeon: return "dungeon";
+        case SceneKind::Crisscross: return "crisscross";
+        case SceneKind::Storeroom: return "storeroom";
     }
     return "?";
 }
@@ -273,6 +279,199 @@ static std::vector<Segment> clusterWalls(int wallCount, std::uint64_t seed) {
     return c.walls;
 }
 
+// ---- App scenes: laid out to read as places, not noise ----
+
+static std::vector<Segment> forestWalls(int wallCount, std::uint64_t seed) {
+    // Six-sided trees with a little space around each. A hexagon is built from exact constants and
+    // rotated by a random unit vector, so there is no trigonometry and the stream stays portable.
+    const int trees = std::max(1, wallCount / 6);
+    Collector c(trees * 6, seed);
+    const double perTree = std::sqrt(kStressWidth * kStressHeight / trees);
+    const double rMax = std::clamp(perTree * 0.32, 7.0, 22.0);
+    const double gap = std::clamp(perTree * 0.18, 3.0, 16.0);
+    const double h = std::sqrt(3.0) * 0.5;
+    const double ux[6] = {1.0, 0.5, -0.5, -1.0, -0.5, 0.5};
+    const double uy[6] = {0.0, h, h, 0.0, -h, -h};
+    struct Tree { Vec2 c; double r; };
+    std::vector<Tree> placed;
+    const long long attempts = 400ll * trees + 1000;
+    for (long long i = 0; i < attempts && static_cast<int>(placed.size()) < trees; ++i) {
+        const double r = c.rng.range(0.55 * rMax, rMax);
+        const Vec2 centre{c.rng.range(r + 6.0, kStressWidth - r - 6.0), c.rng.range(r + 6.0, kStressHeight - r - 6.0)};
+        const Vec2 d = c.rng.direction();
+        bool clear = true;
+        for (const Tree& t : placed)
+            if (length(t.c - centre) < t.r + r + gap) { clear = false; break; }
+        if (!clear) continue;
+        Vec2 v[6];
+        for (int k = 0; k < 6; ++k) v[k] = centre + Vec2{ux[k] * d.x - uy[k] * d.y, ux[k] * d.y + uy[k] * d.x} * r;
+        for (int k = 0; k < 6; ++k) c.add(v[k], v[(k + 1) % 6]);
+        placed.push_back({centre, r});
+    }
+    return c.walls;
+}
+
+Vec2 dungeonStart() { return {860.0, 280.0}; }
+
+static std::vector<Segment> dungeonWalls() {
+    std::vector<Segment> w;
+    const auto wall = [&](double x0, double y0, double x1, double y1) { w.push_back({{x0, y0}, {x1, y1}}); };
+    const auto rect = [&](double x0, double y0, double x1, double y1) {
+        wall(x0, y0, x1, y0);
+        wall(x1, y0, x1, y1);
+        wall(x1, y1, x0, y1);
+        wall(x0, y1, x0, y0);
+    };
+    const auto poly = [&](std::initializer_list<Vec2> pts) {
+        const std::vector<Vec2> p(pts);
+        for (std::size_t i = 0; i < p.size(); ++i) wall(p[i].x, p[i].y, p[(i + 1) % p.size()].x, p[(i + 1) % p.size()].y);
+    };
+    // A straight wall with doorways cut out of it: `doors` lists (from, to) along the wall.
+    const auto hline = [&](double y, double x0, double x1, std::initializer_list<std::pair<double, double>> doors) {
+        double x = x0;
+        for (const auto& d : doors) {
+            if (d.first > x) wall(x, y, d.first, y);
+            x = d.second;
+        }
+        if (x1 > x) wall(x, y, x1, y);
+    };
+    const auto vline = [&](double x, double y0, double y1, std::initializer_list<std::pair<double, double>> doors) {
+        double y = y0;
+        for (const auto& d : doors) {
+            if (d.first > y) wall(x, y, x, d.first);
+            y = d.second;
+        }
+        if (y1 > y) wall(x, y, x, y1);
+    };
+
+    // West wing: a maze of 7 x 10 cells (80 x 100), carved by a depth-first walk with a fixed seed,
+    // then a few extra walls knocked out so it loops and the light can see along it.
+    {
+        constexpr int cols = 7, rows = 10;
+        constexpr double cw = 80.0, ch = 100.0;
+        Rng rng(0xD06E0);
+        std::vector<char> seen(cols * rows, 0), openRight(cols * rows, 0), openDown(cols * rows, 0);
+        std::vector<int> stack{0};
+        seen[0] = 1;
+        while (!stack.empty()) {
+            const int cell = stack.back();
+            const int cx = cell % cols, cy = cell / cols;
+            int options[4], n = 0;
+            if (cx > 0 && !seen[cell - 1]) options[n++] = cell - 1;
+            if (cx < cols - 1 && !seen[cell + 1]) options[n++] = cell + 1;
+            if (cy > 0 && !seen[cell - cols]) options[n++] = cell - cols;
+            if (cy < rows - 1 && !seen[cell + cols]) options[n++] = cell + cols;
+            if (n == 0) { stack.pop_back(); continue; }
+            const int next = options[rng.below(n)];
+            if (next == cell + 1) openRight[cell] = 1;
+            else if (next == cell - 1) openRight[next] = 1;
+            else if (next == cell + cols) openDown[cell] = 1;
+            else openDown[next] = 1;
+            seen[next] = 1;
+            stack.push_back(next);
+        }
+        for (int i = 0; i < 14; ++i) {
+            const int cell = rng.below(cols * rows);
+            if (rng.below(2) == 0 && cell % cols < cols - 1) openRight[cell] = 1;
+            else if (cell / cols < rows - 1) openDown[cell] = 1;
+        }
+        for (int cy = 0; cy < rows; ++cy)
+            for (int cx = 0; cx < cols; ++cx) {
+                const int cell = cy * cols + cx;
+                const double x0 = cx * cw, y0 = cy * ch;
+                if (cx < cols - 1 && !openRight[cell]) wall(x0 + cw, y0, x0 + cw, y0 + ch);
+                if (cy < rows - 1 && !openDown[cell]) wall(x0, y0 + ch, x0 + cw, y0 + ch);
+            }
+        // The wing's east wall, with ways into the great hall and the corridor.
+        vline(560, 0, 1000, {{215, 285}, {565, 635}, {815, 885}});
+    }
+
+    // Great hall (560-1160 x 0-560): two rows of pillars.
+    vline(1160, 0, 560, {{230, 310}});
+    for (double py : {170.0, 390.0})
+        for (double px : {680.0, 800.0, 920.0, 1040.0}) rect(px - 18, py - 18, px + 18, py + 18);
+
+    // Treasure room (1160-1600 x 0-380): a long table and three chests.
+    hline(380, 1160, 1600, {{1340, 1420}});
+    rect(1290, 160, 1470, 215);
+    rect(1195, 35, 1245, 65);
+    rect(1530, 35, 1580, 65);
+    rect(1530, 300, 1580, 330);
+
+    // Shrine (1160-1600 x 380-560): an altar and two candle stands.
+    poly({{1380, 440}, {1410, 470}, {1380, 500}, {1350, 470}});
+    rect(1250, 455, 1266, 471);
+    rect(1494, 455, 1510, 471);
+
+    // Corridor (y 560-640) across the east side.
+    hline(560, 560, 1600, {{800, 880}, {1440, 1510}});
+    hline(640, 560, 1600, {{690, 760}, {1080, 1150}, {1450, 1520}});
+
+    // Library (560-960 x 640-1000): rows of bookshelves.
+    vline(960, 640, 1000, {{880, 940}});
+    for (double y : {720.0, 790.0, 860.0, 930.0}) rect(610, y, 830, y + 14);
+    rect(880, 700, 920, 740);
+
+    // Storage (960-1320 x 640-1000): stacks of crates.
+    vline(1320, 640, 1000, {{760, 830}});
+    for (const auto& p : std::initializer_list<std::pair<double, double>>{
+             {1000, 690}, {1030, 690}, {1000, 720}, {1220, 700}, {1250, 700}, {1150, 800},
+             {1000, 900}, {1030, 930}, {1100, 920}, {1240, 880}, {1270, 910}, {1240, 940}})
+        rect(p.first, p.second, p.first + 28, p.second + 28);
+
+    // Cave (1320-1600 x 640-1000): rough rocks.
+    poly({{1380, 720}, {1420, 700}, {1450, 730}, {1430, 770}, {1390, 765}});
+    poly({{1500, 690}, {1545, 705}, {1540, 745}, {1505, 740}});
+    poly({{1400, 860}, {1450, 840}, {1490, 870}, {1470, 915}, {1420, 920}, {1395, 895}});
+    poly({{1530, 900}, {1570, 880}, {1585, 930}, {1545, 950}});
+    poly({{1350, 950}, {1375, 930}, {1385, 975}});
+    return w;
+}
+
+static std::vector<Segment> crisscrossWalls(int wallCount, std::uint64_t seed) {
+    // Long walls from one side of the room to another, so almost every pair crosses somewhere.
+    const int beams = std::clamp(wallCount / 25, 4, 200);  // few walls: the crossings are the point
+    Collector c(beams, seed);
+    const auto onSide = [&](int side) -> Vec2 {
+        const double t = c.rng.range(0.04, 0.96);
+        switch (side) {
+            case 0: return {t * kStressWidth, 0.0};
+            case 1: return {kStressWidth, t * kStressHeight};
+            case 2: return {t * kStressWidth, kStressHeight};
+            default: return {0.0, t * kStressHeight};
+        }
+    };
+    fill(c, beams, [&] {
+        const int s0 = c.rng.below(4);
+        const int s1 = (s0 + 1 + c.rng.below(3)) % 4;
+        c.add(onSide(s0), onSide(s1));
+    });
+    return c.walls;
+}
+
+static std::vector<Segment> storeroomWalls(int wallCount, std::uint64_t seed) {
+    // Crates packed into one 160 x 100 spot (1% of the room), one crate per slot of an even lattice,
+    // nudged a little inside its slot. Crates never touch, so no walls cross: the scene has about
+    // as many corners as the Forest with the same wall count, and only the bunching differs.
+    const int crates = std::max(1, wallCount / 4);
+    Collector c(crates * 4, seed);
+    const double w = 160.0, h = 100.0;
+    const Vec2 lo{c.rng.range(1150.0, 1350.0), c.rng.range(300.0, 600.0)};
+    const int cols = std::max(1, static_cast<int>(std::ceil(std::sqrt(crates * w / h))));
+    const int rows = (crates + cols - 1) / cols;
+    const double px = w / cols, py = h / rows;
+    for (int i = 0; i < crates; ++i) {
+        const double sx = 0.62 * px, sy = 0.62 * py;
+        const double x0 = lo.x + (i % cols) * px + c.rng.range(0.04, 0.34) * px;
+        const double y0 = lo.y + (i / cols) * py + c.rng.range(0.04, 0.34) * py;
+        c.add({x0, y0}, {x0 + sx, y0});
+        c.add({x0 + sx, y0}, {x0 + sx, y0 + sy});
+        c.add({x0 + sx, y0 + sy}, {x0, y0 + sy});
+        c.add({x0, y0 + sy}, {x0, y0});
+    }
+    return c.walls;
+}
+
 namespace {
 Scene sceneFrom(const std::vector<Segment>& walls) {
     Scene s(kStressWidth, kStressHeight);
@@ -294,6 +493,10 @@ std::vector<Segment> makeSceneWalls(SceneKind kind, int wallCount, std::uint64_t
         case SceneKind::Maze: return mazeWalls(wallCount, seed);
         case SceneKind::LongWalls: return longWallsWalls(wallCount, seed);
         case SceneKind::Cluster: return clusterWalls(wallCount, seed);
+        case SceneKind::Forest: return forestWalls(wallCount, seed);
+        case SceneKind::Dungeon: return dungeonWalls();
+        case SceneKind::Crisscross: return crisscrossWalls(wallCount, seed);
+        case SceneKind::Storeroom: return storeroomWalls(wallCount, seed);
     }
     return {};
 }

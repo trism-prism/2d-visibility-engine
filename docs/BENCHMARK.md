@@ -2,6 +2,8 @@
 
 This is about `vis_bench`, the headless benchmark in `bench/main.cpp`, and the results committed in `bench/results/`. Every number here comes from `bench/results/results.csv`, `bench/results/grid_sweep.csv` or `bench/results/results.meta.txt`. The run time also comes from the console log of that run. For the algorithms themselves, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
+> **Note (2026-11-18).** The app's scene list changed after these results. The panel now has Forest, Dungeon, Crisscross and Storeroom, which are laid out to be readable by eye. The benchmark still measures the four synthetic stress layouts below (Scatter, Maze, Long walls, Cluster), and their generators didn't change, so these numbers still describe them. You can open them in the app with `--scene scatter|maze|long|cluster`.
+
 > **Note (2026-11-13).** I made the angular sort in `core/visibility.cpp` faster after producing these results. It now caches each target's difference from the light and applies the same floating-point filter as `orient` before falling back to it, so the output is bitwise identical. A throwaway harness (not this benchmark) showed the sort about 30% faster and the total query about 20-30% faster on Scatter and Maze at n=1000.
 >
 > I did **not** regenerate `bench/results/*` or any number in this document. They predate that change, so the sort times and the sort share of the Grid time below are higher than the current code would give. I haven't rerun the full benchmark.

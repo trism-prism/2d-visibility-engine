@@ -24,7 +24,9 @@ private:
 
 std::uint64_t splitmix64(std::uint64_t& state);
 
-enum class SceneKind { Demo, Scatter, Maze, LongWalls, Cluster };
+// Demo, Forest, Dungeon, Crisscross and Storeroom are the app's scenes, laid out to be readable by eye.
+// Scatter, Maze, LongWalls and Cluster are the synthetic stress layouts the benchmark and tests use.
+enum class SceneKind { Demo, Scatter, Maze, LongWalls, Cluster, Forest, Dungeon, Crisscross, Storeroom };
 const char* sceneKindName(SceneKind kind);
 
 constexpr double kStressWidth = 1600.0;
@@ -40,7 +42,13 @@ Scene makeScatterScene(int wallCount, std::uint64_t seed);    // many short wall
 Scene makeMazeScene(int wallCount, std::uint64_t seed);       // lattice rooms with doors + long diagonals
 Scene makeLongWallsScene(int wallCount, std::uint64_t seed);  // two near-parallel long families: grid-hostile
 Scene makeClusterScene(int wallCount, std::uint64_t seed);    // everything inside a few cells: grid-hostile
-Scene makeScene(SceneKind kind, int wallCount, std::uint64_t seed);  // Demo ignores the arguments
+// App scenes in the same world. They read as places rather than noise:
+//   Forest  - small six-sided trees spread over the floor (about wallCount walls, six per tree).
+//   Dungeon - a fixed one-screen game level: a maze wing and furnished rooms; ignores both arguments.
+//   Crisscross - long walls from side to side that cross each other (wallCount / 25 walls, 4 to 200).
+//   Storeroom - crates (four walls each) packed into one 160 x 100 spot, 1% of the room.
+Scene makeScene(SceneKind kind, int wallCount, std::uint64_t seed);  // Demo and Dungeon ignore the arguments
+Vec2 dungeonStart();  // where the hero (the light) starts in the Dungeon
 // The raw wall list of a scene (before Scene's insertion rules), for callers that want to control
 // the grid resolution before the single rebuild in Scene::setWalls.
 std::vector<Segment> makeSceneWalls(SceneKind kind, int wallCount, std::uint64_t seed);

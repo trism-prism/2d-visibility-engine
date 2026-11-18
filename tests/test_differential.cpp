@@ -136,7 +136,8 @@ TEST_CASE("differential: generator scenes at several resolutions") {
     constexpr std::uint64_t kBase = 0xD1FF2000;
     Tally tally;
     int index = 0;
-    for (SceneKind kind : {SceneKind::Scatter, SceneKind::Maze, SceneKind::LongWalls, SceneKind::Cluster}) {
+    for (SceneKind kind : {SceneKind::Scatter, SceneKind::Maze, SceneKind::LongWalls, SceneKind::Cluster, SceneKind::Forest,
+                           SceneKind::Dungeon, SceneKind::Crisscross, SceneKind::Storeroom}) {
         for (std::uint64_t k = 0; k < 3; ++k, ++index) {
             const std::uint64_t seed = kBase + static_cast<std::uint64_t>(index);
             Rng rng(seed ^ 0x9E3779B97F4A7C15ull);  // not the generator's own stream

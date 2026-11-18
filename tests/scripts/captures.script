@@ -52,26 +52,26 @@ capture build/captures/details_demo.bmp
 set detail simple
 set overlay off
 
-# 5. the work meter on a friendly and an unfriendly scene
+# 5. the work meter on a friendly and an unfriendly scene (same 1,000 walls)
 key 1
 wait 6
-capture build/captures/simple_scatter_meter.bmp
+capture build/captures/simple_forest_meter.bmp
 key 4
 wait 6
-capture build/captures/simple_cluster_meter.bmp
+capture build/captures/simple_storeroom_meter.bmp
 
-# 6. stress scenes with the grid overlay
+# 6. the four scenes with the grid overlay
 set overlay grid
 key 1
 wait 6
-capture build/captures/stress_scatter_grid.bmp
+capture build/captures/scene_forest.bmp
 key 2
 wait 6
-capture build/captures/stress_maze_grid.bmp
+capture build/captures/scene_dungeon.bmp
 key 3
 wait 6
-capture build/captures/stress_long_grid.bmp
+capture build/captures/scene_crisscross.bmp
 key 4
 wait 6
-capture build/captures/stress_cluster_grid.bmp
+capture build/captures/scene_storeroom.bmp
 quit

@@ -11,7 +11,7 @@ Contents: [Window layout](#window-layout) · [Simple and Engine](#two-levels-sim
 - **Left:** the room (the world, letterboxed).
 - **Right:** the panel.
 - **Below the room:** a strip that holds the legend and the tour card.
-- **Bottom:** a one-line status bar. It reads "Tab method · O show · 1-4 scenes · R reset · C clear" until a short message such as "Added · 56 walls" replaces it.
+- **Bottom:** a one-line status bar. It reads "Tab method · O show · 1-4 scenes · arrows walk · R reset · C clear" until a short message such as "Added · 56 walls" replaces it.
 
 A "Drag me" tag points at the light until you've dragged it once. The smallest window is 900 x 600.
 
@@ -31,10 +31,10 @@ Top to bottom:
 | Section | What it holds |
 |---|---|
 | "Light and walls" | "Move the light, draw walls, compare methods.", the hint "Drag the floor to draw, right-click to erase.", and a "Tour" button |
-| Method cards | **All walls** ("Baseline: checks every wall.") is the Baseline back end: every ray is tested against every wall. I call it Baseline in the first version of the interface, the benchmark and these documents, and `Brute` in the code and `--mode brute`. **Grid** ("Checks only nearby walls.") is the Grid back end: a ray only tests the walls in the grid squares it crosses. Under the cards: "Same picture, different amount of work." Both give exactly the same picture. The card in use is highlighted |
+| Method cards | **All walls** ("Baseline: checks every wall.") is the Baseline back end: every ray is tested against every wall. I call it Baseline in the first version of the interface, the benchmark and these documents, and `Brute` in the code and `--mode brute`. **Grid** ("Checks only nearby walls.") is the Grid back end: a ray only tests the walls in the grid squares it crosses. Under the cards: "Grid cuts the floor into squares. A ray only checks walls in the squares it passes. Same picture, less work." Both give exactly the same picture. The card in use is highlighted |
 | Show | **Light only** (overlay `off`), **Squares** (`grid`, formerly "Grid cells": squares tinted by how many rays crossed them), **One ray** (`probe`, formerly "Probe ray": the ray nearest the cursor, the squares it crossed and the walls it tested), **All rays** (`rays`). A caption under the choice describes what's on screen in one live sentence (see below). "Outline" (formerly "Outline visibility polygon") draws the edge of the lit region, the visibility polygon. In Engine the probe's numbers are listed here: squares crossed, walls tested "X of N", `tMinus`, `tPlus` |
 | Work | The work meter, [below](#the-work-meter) |
-| Scene cards | **Demo** (key `R`), **Scatter** (`1`), **Maze** (`2`), **Long walls** (`3`), **Cluster** (`4`), each with a one-line description (for example "Where the grid shines."). The **Walls** slider picks 100, 250, 500, 1,000, 2,000, 3,000 or 5,000 walls for the generated scenes. Releasing it rebuilds the current generated scene (it does nothing to the demo room). Then **Clear** (`C`) and **Reset** (`R`). A short orange note appears under the cards when "All walls" would take about 30 ms or more per update in the current scene, for example "All walls is slow here: ~246 ms per update." |
+| Scene cards | **Demo** (key `R`), **Forest** (`1`), **Dungeon** (`2`), **Crisscross** (`3`), **Storeroom** (`4`), each with a one-line description. Under the cards, two plain sentences about the scene in use: what it is and what to notice ([below](#the-scenes)). The **Walls** slider picks a size of 100, 250, 500, 1,000, 2,000, 3,000 or 5,000 for Forest, Crisscross and Storeroom, and releasing it rebuilds the scene. It's greyed out for the Demo room and the Dungeon, which have fixed layouts. The number beside it is the walls actually in the room (while dragging, the size being picked). Then **Clear** (`C`) and **Reset** (`R`). A short orange note appears under the cards when "All walls" would take about 30 ms or more per update in the current scene, for example "All walls is slow here: ~246 ms per update." |
 | Engine only | Numbers, Edit cost, Compare, Grid size and a key list, plus a Seed field under the scene cards ([below](#what-engine-adds)) |
 
 Live captions under Show:
@@ -58,7 +58,7 @@ The strip under the room shows the **legend** for the selected overlay (what the
 
 The probe markers on the ray read "hit", "stops here" and "other side goes to here".
 
-**Dense-scene fading.** Walls are drawn fainter in dense scenes. The opacity falls with the wall count above 400 walls, and also with the total wall length, so Long walls at 1,000 walls is drawn much fainter. Skipped walls in the One ray view fade the same way.
+**Dense-scene fading.** Walls are drawn fainter in dense scenes. The opacity falls with the wall count above 400 walls, and also with the total wall length, so a 5,000-wall Forest is drawn much fainter than the demo room. Skipped walls in the One ray view fade the same way.
 
 ## The work meter
 
@@ -100,12 +100,27 @@ Six steps, shown in a card under the room with a counter such as "1 / 6":
 | 2 | Draw walls | Draw and remove a wall (same setup) |
 | 3 | One ray | Grid, One ray overlay |
 | 4 | All walls | The same ray, now testing everything (All walls, One ray) |
-| 5 | More walls | 1,000 scattered walls (Scatter, Grid) and the meter |
-| 6 | Worst case | 1,000 walls packed in one corner (Cluster), where the grid helps least |
+| 5 | A forest | 1,000 walls of small trees spread out (Forest, Grid) and the meter |
+| 6 | A storeroom | The same 1,000 walls as crates crammed into one spot (Storeroom), where the grid saves much less |
 
 Each step sets the scene, method and overlay it talks about. **Next** moves on whether or not you did what the card suggested. **Back**, **Close**, `Esc` and the final **Done** step back or close it. "Tour" in the panel starts it again from step 1 on the demo room (`App::tourStart`, `app/tour.cpp`).
 
 The tour **starts by itself** only in a plain interactive launch: no `--scene`, `--walls`, `--seed`, `--mode`, `--overlay`, `--light` or `--compare` flag, and no `--capture` or `--script`. `--tour` starts it explicitly (`app/main.cpp`).
+
+## The scenes
+
+The demo room is hand-built. The other four are laid out so you can tell what's going on just by looking. Each one shows a different side of the grid.
+
+| Scene | What it is | What to notice (Grid, size 1,000, seed 1) |
+|---|---|---|
+| Forest | Small six-sided trees spread over the floor, six walls per tree. Trees never touch | Each ray passes only a few trees, so the grid skips almost everything: 9,231 checks instead of 1,000,000 (about 1%) |
+| Dungeon | A fixed one-screen game level, 218 walls: a maze wing on the left, then a pillared hall, a treasure room, a shrine, a corridor, a library, a storage room and a cave. The light is the hero's torch | Close to what a real level looks like. The grid does about 2% of the work (1,346 checks instead of 55,722) |
+| Crisscross | Long walls from one side of the room to another, one per 25 on the slider (40 at 1,000) | Every crossing is a corner the light has to aim at: 40 walls need 447 rays. Long walls also sit in many squares, so the grid does 18% of the work |
+| Storeroom | Crates, four walls each, packed into one 160 x 100 spot (1% of the room). No walls cross | The grid's squares are sized for walls spread evenly. Here they all land in a few squares, so the grid does about ten times the Forest's work for the same 1,000 walls (88,434 checks) |
+
+The numbers come from the live work meter at the default view. Moving the light changes them.
+
+The benchmark doesn't use these scenes. It keeps its four synthetic stress layouts (Scatter, Maze, Long walls, Cluster), which are still available from the command line with `--scene` ([RUNNING.md](RUNNING.md)).
 
 ## Mouse and keys
 
@@ -119,7 +134,8 @@ The tour **starts by itself** only in a plain interactive launch: no `--scene`, 
 | `R` | Reset to the demo room (same as the Demo card and the Reset button) |
 | `C` | Remove all user walls |
 | `O` | Cycle Show: Light only, Squares, One ray, All rays |
-| `1` `2` `3` `4` | Load Scatter, Maze, Long walls or Cluster (wall count from the slider, seed from the Seed field) |
+| `1` `2` `3` `4` | Load Forest, Dungeon, Crisscross or Storeroom (size from the slider, seed from the Seed field) |
+| Arrow keys or `WASD` (held) | Walk the light at 240 world units per second. It has a 9-unit body: walls stop it, and it slides along a wall it walks into. In the Dungeon it's drawn as a small hero holding a torch, with the hint "Arrow keys to walk" until the first step |
 | `Esc` | Cancel the wall being drawn; also closes the tour |
 
 Keys and mouse presses are ignored while a text field has focus, or when the press lands on the panel or the tour card. A drag that started on the room keeps working if the cursor crosses the panel.

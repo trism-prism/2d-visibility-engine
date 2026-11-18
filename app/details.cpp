@@ -154,6 +154,7 @@ void drawEngineDetails(App& app) {
         "Tab / M    method",
         "O          show",
         "1 2 3 4    scenes",
+        "Arrows     walk the light",
         "R          reset",
         "C          clear walls",
         "Shift      snap ends",

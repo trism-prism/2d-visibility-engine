@@ -330,6 +330,42 @@ TEST_CASE("Rng and generators are deterministic") {
     CHECK(makeDemoScene().userWallCount() <= 80);
 }
 
+TEST_CASE("app scenes: deterministic, sized as documented, and laid out as described") {
+    // Forest: six walls per tree, trees never touch, so no crossings.
+    const Scene f1 = makeScene(SceneKind::Forest, 600, 7), f2 = makeScene(SceneKind::Forest, 600, 7);
+    CHECK(f1.walls() == f2.walls());
+    CHECK(f1.walls() != makeScene(SceneKind::Forest, 600, 8).walls());
+    CHECK(f1.userWallCount() == 600);
+    CHECK(f1.intersections().empty());
+    // Crisscross: one long wall per 25 requested, crossing a lot (more crossings than walls).
+    const Scene x = makeScene(SceneKind::Crisscross, 1000, 7);
+    CHECK(x.userWallCount() == 40);
+    CHECK(x.intersections().size() > 4 * x.userWallCount());
+    // Storeroom: four walls per crate, no crossings, every wall inside a 160 x 100 patch.
+    const Scene r = makeScene(SceneKind::Storeroom, 600, 7);
+    CHECK(r.userWallCount() == 600);
+    CHECK(r.intersections().empty());
+    double x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    for (std::size_t i = Scene::kBoundaryWalls; i < r.walls().size(); ++i)
+        for (Vec2 p : {r.walls()[i].a, r.walls()[i].b}) {
+            x0 = std::min(x0, p.x); y0 = std::min(y0, p.y);
+            x1 = std::max(x1, p.x); y1 = std::max(y1, p.y);
+        }
+    CHECK((x1 - x0 <= 160.0 && y1 - y0 <= 100.0));
+    // Dungeon: a fixed layout, the same for any count or seed, and the hero starts clear of walls.
+    const Scene d = makeScene(SceneKind::Dungeon, 100, 1);
+    CHECK(d.walls() == makeScene(SceneKind::Dungeon, 4000, 9).walls());
+    CHECK(d.userWallCount() > 150);
+    double nearest = 1e9;
+    for (std::size_t i = Scene::kBoundaryWalls; i < d.walls().size(); ++i) {
+        const Segment& w = d.walls()[i];
+        const Vec2 e = w.b - w.a;
+        const double t = std::clamp(dot(dungeonStart() - w.a, e) / dot(e, e), 0.0, 1.0);
+        nearest = std::min(nearest, length(dungeonStart() - (w.a + e * t)));
+    }
+    CHECK(nearest > 9.0);
+}
+
 TEST_CASE("generators: long-walls crossing count stays far below n^2/4 at n = 1000") {
     Tally tally;
     for (std::uint64_t seed : {1u, 2u, 3u}) {
@@ -470,7 +506,8 @@ TEST_CASE("Scene::addWall rejects coordinates of huge magnitude") {
 
 TEST_CASE("makeSceneWalls + one setWalls equals makeScene (the app's single-rebuild load path)") {
     Tally tally;
-    for (SceneKind k : {SceneKind::Demo, SceneKind::Scatter, SceneKind::Maze, SceneKind::LongWalls, SceneKind::Cluster}) {
+    for (SceneKind k : {SceneKind::Demo, SceneKind::Scatter, SceneKind::Maze, SceneKind::LongWalls, SceneKind::Cluster,
+                        SceneKind::Forest, SceneKind::Dungeon, SceneKind::Crisscross, SceneKind::Storeroom}) {
         Scene s(kStressWidth, kStressHeight);
         s.setGridResolution(7, 5);  // a manual resolution set before the single load survives it
         const std::uint64_t before = s.revision();

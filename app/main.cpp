@@ -1,5 +1,5 @@
 // Interactive 2D visibility / lighting application (GLFW + Dear ImGui + OpenGL3).
-//   vis_app [--size WxH] [--scene demo|scatter|maze|long|cluster] [--walls N] [--seed S]
+//   vis_app [--size WxH] [--scene demo|forest|dungeon|crisscross|storeroom|scatter|maze|long|cluster] [--walls N] [--seed S]
 //           [--mode brute|grid] [--overlay off|grid|probe|rays] [--light x,y] [--compare]
 //           [--tour] [--capture file.bmp [--frames N]] [--script file]
 // Capture and script runs use a hidden window and no vsync. The guided tour starts by itself in a
@@ -53,6 +53,10 @@ bool parseArgs(int argc, char** argv, Options& o) {
             else if (s == "maze") o.scene = vis::SceneKind::Maze;
             else if (s == "long") o.scene = vis::SceneKind::LongWalls;
             else if (s == "cluster") o.scene = vis::SceneKind::Cluster;
+            else if (s == "forest") o.scene = vis::SceneKind::Forest;
+            else if (s == "dungeon") o.scene = vis::SceneKind::Dungeon;
+            else if (s == "crisscross") o.scene = vis::SceneKind::Crisscross;
+            else if (s == "storeroom") o.scene = vis::SceneKind::Storeroom;
             else return false;
         } else if (a == "--walls") o.walls = std::clamp(std::atoi(next().c_str()), 100, 5000);
         else if (a == "--seed") o.seed = std::max(0, std::atoi(next().c_str()));
@@ -118,7 +122,7 @@ int main(int argc, char** argv) {
     Options opt;
     if (!parseArgs(argc, argv, opt)) {
         std::fprintf(stderr,
-                     "usage: vis_app [--size WxH] [--scene demo|scatter|maze|long|cluster] [--walls N] [--seed S]\n"
+                     "usage: vis_app [--size WxH] [--scene demo|forest|dungeon|crisscross|storeroom|scatter|maze|long|cluster] [--walls N] [--seed S]\n"
                      "               [--mode brute|grid] [--overlay off|grid|probe|rays] [--light x,y] [--compare]\n"
                      "               [--tour] [--capture file.bmp [--frames N]] [--script file]\n");
         return 2;
@@ -162,6 +166,7 @@ int main(int argc, char** argv) {
     app.vsync = !headless;
     app.stressWalls = opt.walls;
     app.seed = opt.seed;
+    if (headless) app.fixedDt = 1.0f / 60.0f;  // scripted walking moves the same distance per frame on any machine
     app.mode = opt.mode;
     app.overlay = opt.overlay;
     app.compare = opt.compare;

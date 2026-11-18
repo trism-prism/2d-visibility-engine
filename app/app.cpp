@@ -23,12 +23,23 @@ const char* overlayName(Overlay o) {
 
 namespace {
 const SceneInfo kSceneInfos[] = {
-    {vis::SceneKind::Demo, "Demo", "Just try it out.", "R"},
-    {vis::SceneKind::Scatter, "Scatter", "Where the grid shines.", "1"},
-    {vis::SceneKind::Maze, "Maze", "Closest to a real level.", "2"},
-    {vis::SceneKind::LongWalls, "Long walls", "Both methods struggle.", "3"},
-    {vis::SceneKind::Cluster, "Cluster", "Where the grid helps least.", "4"},
+    {vis::SceneKind::Demo, "Demo", "A room to play in.", "R",
+     "A hand-built room with doors, pillars and odd corners. Try drawing your own walls.", false},
+    {vis::SceneKind::Forest, "Forest", "Lots of small trees, spread out.", "1",
+     "Each ray only passes a few trees, so the grid skips almost everything. This is where it shines.", true},
+    {vis::SceneKind::Dungeon, "Dungeon", "A tiny game level. Walk with the arrows.", "2",
+     "A maze on the left, rooms on the right. The hero carries the light; use the arrow keys or WASD.", false},
+    {vis::SceneKind::Crisscross, "Crisscross", "A few long walls that cross a lot.", "3",
+     "Every crossing is another corner the light has to check, so there are far more rays than walls. Long walls also run through lots of squares.", true},
+    {vis::SceneKind::Storeroom, "Storeroom", "Crates crammed into one spot.", "4",
+     "The grid's squares assume walls are spread out. Here they're all packed into a few squares, so any ray that reaches them checks a lot.", true},
+    // Stress layouts for the benchmark and the command line; not listed in the panel.
+    {vis::SceneKind::Scatter, "Scatter", "Short walls, uniform.", "", "", true},
+    {vis::SceneKind::Maze, "Maze", "Lattice rooms with doors.", "", "", true},
+    {vis::SceneKind::LongWalls, "Long walls", "Near-parallel long walls.", "", "", true},
+    {vis::SceneKind::Cluster, "Cluster", "Packed into a few cells.", "", "", true},
 };
+constexpr int kPanelScenes = 5;
 std::string wallsPhrase(std::size_t n) { return ui::fmtInt(n) + (n == 1 ? " wall" : " walls"); }
 }  // namespace
 
@@ -38,7 +49,7 @@ const SceneInfo& sceneInfo(vis::SceneKind k) {
     return kSceneInfos[0];
 }
 const SceneInfo* sceneInfos(int& count) {
-    count = static_cast<int>(sizeof kSceneInfos / sizeof kSceneInfos[0]);
+    count = kPanelScenes;
     return kSceneInfos;
 }
 
@@ -117,15 +128,17 @@ void App::loadScene(vis::SceneKind k) {
     scene = std::move(fresh);
     if (k == vis::SceneKind::Demo) {
         light = vis::demoLight();
+    } else if (k == vis::SceneKind::Dungeon) {
+        light = vis::dungeonStart();
     } else {
         Vec2 preferred{scene.width() * 0.5, scene.height() * 0.5};
-        if (k == vis::SceneKind::Cluster && scene.userWallCount() > 0) {
+        if ((k == vis::SceneKind::Cluster || k == vis::SceneKind::Storeroom) && scene.userWallCount() > 0) {
             // look at the packed patch from a distance
             Vec2 c{0, 0};
             for (std::size_t i = vis::Scene::kBoundaryWalls; i < scene.walls().size(); ++i)
                 c = c + (scene.walls()[i].a + scene.walls()[i].b) * 0.5;
             c = c * (1.0 / static_cast<double>(scene.userWallCount()));
-            preferred = {std::clamp(c.x - 380.0, 40.0, scene.width() - 40.0), c.y};
+            preferred = {std::clamp(c.x - (k == vis::SceneKind::Storeroom ? 220.0 : 380.0), 40.0, scene.width() - 40.0), c.y};
         }
         light = vis::chooseLight(scene, preferred);
     }
@@ -296,10 +309,18 @@ void App::handleInput(ImGuiIO& io) {
         if (pressed(ImGuiKey_R)) resetDemo();
         if (pressed(ImGuiKey_C)) clearWalls();
         if (pressed(ImGuiKey_O)) cycleOverlay();
-        if (pressed(ImGuiKey_1)) loadScene(vis::SceneKind::Scatter);
-        if (pressed(ImGuiKey_2)) loadScene(vis::SceneKind::Maze);
-        if (pressed(ImGuiKey_3)) loadScene(vis::SceneKind::LongWalls);
-        if (pressed(ImGuiKey_4)) loadScene(vis::SceneKind::Cluster);
+        if (pressed(ImGuiKey_1)) loadScene(vis::SceneKind::Forest);
+        if (pressed(ImGuiKey_2)) loadScene(vis::SceneKind::Dungeon);
+        if (pressed(ImGuiKey_3)) loadScene(vis::SceneKind::Crisscross);
+        if (pressed(ImGuiKey_4)) loadScene(vis::SceneKind::Storeroom);
+        // Walk the light (the hero in the Dungeon) with the arrow keys or WASD; walls block it.
+        Vec2 dir{0, 0};
+        const auto held = [](ImGuiKey a, ImGuiKey b) { return ImGui::IsKeyDown(a) || ImGui::IsKeyDown(b); };
+        if (held(ImGuiKey_LeftArrow, ImGuiKey_A)) dir.x -= 1;
+        if (held(ImGuiKey_RightArrow, ImGuiKey_D)) dir.x += 1;
+        if (held(ImGuiKey_UpArrow, ImGuiKey_W)) dir.y -= 1;
+        if (held(ImGuiKey_DownArrow, ImGuiKey_S)) dir.y += 1;
+        if ((dir.x != 0 || dir.y != 0) && !draggingLight) walk(dir, fixedDt > 0.0f ? fixedDt : io.DeltaTime);
         if (pressed(ImGuiKey_Escape)) {
             if (tourActive) tourClose();
             cancelWall();
@@ -580,4 +601,41 @@ std::string App::logLine() const {
                   static_cast<unsigned long long>(result.stats.wallTests), result.polygon.size(),
                   field("identical").c_str());
     return b;
+}
+
+// Moves the light like a character: a fixed speed, a body radius, and sliding along a wall it runs
+// into (each axis is tried on its own). Steps are split so no single step exceeds the radius.
+void App::walk(Vec2 dir, float dt) {
+    constexpr double speed = 240.0, radius = 9.0;
+    const double len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+    double remaining = speed * std::clamp(static_cast<double>(dt), 0.0, 0.05);
+    if (dir.x != 0) facing = dir.x < 0 ? -1 : 1;
+    const auto clear = [&](Vec2 p) {
+        if (p.x < radius || p.y < radius || p.x > scene.width() - radius || p.y > scene.height() - radius) return false;
+        for (std::size_t i = vis::Scene::kBoundaryWalls; i < scene.walls().size(); ++i) {
+            const vis::Segment& s = scene.walls()[i];
+            const Vec2 e = s.b - s.a;
+            const double l2 = vis::dot(e, e);
+            const double t = l2 > 0.0 ? std::clamp(vis::dot(p - s.a, e) / l2, 0.0, 1.0) : 0.0;
+            if (vis::length(p - (s.a + e * t)) < radius) return false;
+        }
+        return true;
+    };
+    bool moved = false;
+    while (remaining > 1e-9) {
+        const double stepLen = std::min(remaining, radius * 0.5);
+        remaining -= stepLen;
+        const Vec2 step = dir * (stepLen / len);
+        Vec2 p = light;
+        if (clear(p + step)) p = p + step;
+        else if (step.x != 0 && clear(p + Vec2{step.x, 0})) p = p + Vec2{step.x, 0};
+        else if (step.y != 0 && clear(p + Vec2{0, step.y})) p = p + Vec2{0, step.y};
+        else break;
+        light = p;
+        moved = true;
+    }
+    if (moved) {
+        walked = true;
+        dirty = true;
+    }
 }

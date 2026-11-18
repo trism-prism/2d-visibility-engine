@@ -232,6 +232,10 @@ bool segmented(App& app, const char* const* labels, int n, int cols, int& sel, f
     const ImVec2 p0 = ImGui::GetCursorScreenPos();
     ImDrawList* dl = ImGui::GetWindowDrawList();
     bool changed = false;
+    // Scope the buttons by the first label: two segmented controls in one window (Simple/Engine and
+    // the Show selector) would otherwise share the IDs "0/##seg", "1/##seg", and ImGui would route
+    // the second control's clicks to the first.
+    ImGui::PushID(labels[0]);
     for (int i = 0; i < n; ++i) {
         const int r = i / cols, c = i % cols;
         const ImVec2 lo{p0.x + static_cast<float>(c) * (cw + gap), p0.y + static_cast<float>(r) * (h + gap)};
@@ -253,6 +257,7 @@ bool segmented(App& app, const char* const* labels, int n, int cols, int& sel, f
         dl->AddText({lo.x + (cw - ts.x) * 0.5f, lo.y + (h - ts.y) * 0.5f}, on ? IM_COL32(255, 255, 255, 255) : kText, labels[i]);
         registerWidget(app, labels[i], lo, hi);
     }
+    ImGui::PopID();
     ImGui::SetCursorScreenPos({p0.x, p0.y + static_cast<float>(rows) * (h + gap) - gap});
     ImGui::Dummy({w, 0.0f});
     return changed;

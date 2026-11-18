@@ -148,9 +148,53 @@ bool segmentHitsRect(ImVec2 a, ImVec2 b, ImVec2 lo, ImVec2 hi) {
     return true;
 }
 
-void drawDragHint(ImDrawList* dl, const App& app, ImVec2 lp, float grab) {
+// The Dungeon's hero: a small pixel-art figure holding a torch. The torch flame sits on the light,
+// so the lit area reads as torchlight. Mirrored when the hero last walked left.
+void drawHero(ImDrawList* dl, const App& app, ImVec2 lp) {
+    static const char* const kSprite[] = {
+        "....hhh....",
+        "...hhhhh...",
+        "...hssse...",
+        "...hssss..f",
+        "....sss..fF",
+        "...ttttt.Fw",
+        "..tttttttsw",
+        "..s.ttt...w",
+        "....bbb...w",
+        "....l.l....",
+        "....l.l....",
+        "...oo.oo...",
+    };
+    constexpr int kW = 11, kH = 12;
+    constexpr float flameX = 9.5f, flameY = 4.0f;  // sprite cell under the light
+    const float px = std::max(2.0f, 2.8f * app.view.scale);
+    const float flip = app.facing < 0 ? -1.0f : 1.0f;
+    const bool bright = std::fmod(app.now * 7.0, 1.0) < 0.5;  // a little flame flicker
+    for (int y = 0; y < kH; ++y)
+        for (int x = 0; x < kW; ++x) {
+            ImU32 col = 0;
+            switch (kSprite[y][x]) {
+                case 'h': col = IM_COL32(92, 58, 34, 255); break;
+                case 's': col = IM_COL32(236, 196, 160, 255); break;
+                case 'e': col = IM_COL32(30, 30, 40, 255); break;
+                case 't': col = IM_COL32(48, 150, 140, 255); break;
+                case 'b': col = IM_COL32(120, 84, 40, 255); break;
+                case 'l': col = IM_COL32(52, 62, 110, 255); break;
+                case 'o': col = IM_COL32(70, 44, 28, 255); break;
+                case 'w': col = IM_COL32(130, 90, 50, 255); break;
+                case 'f': col = bright ? IM_COL32(255, 236, 140, 255) : IM_COL32(255, 210, 100, 255); break;
+                case 'F': col = bright ? IM_COL32(255, 150, 60, 255) : IM_COL32(255, 180, 80, 255); break;
+                default: continue;
+            }
+            const float x0 = lp.x + flip * (static_cast<float>(x) - flameX) * px;
+            const float y0 = lp.y + (static_cast<float>(y) - flameY) * px;
+            const ImVec2 lo{flip > 0 ? x0 : x0 - px, y0}, hi{flip > 0 ? x0 + px : x0, y0 + px};
+            dl->AddRectFilled(lo, hi, col);
+        }
+}
+
+void drawDragHint(ImDrawList* dl, const App& app, ImVec2 lp, float grab, const char* tip = "Drag me") {
     const float ui = app.uiScale;
-    const char* tip = "Drag me";
     const float px = 15.0f * ui;
     const ImVec2 ts = app.uiFont->CalcTextSizeA(px, FLT_MAX, 0.0f, tip);
     const ImVec2 size{ts.x + 16.0f * ui, ts.y + 8.0f * ui};
@@ -355,11 +399,17 @@ void drawCanvas(ImDrawList* dl, const App& app) {
             const float phase = static_cast<float>(std::fmod(app.now, 1.8) / 1.8);
             dl->AddCircle(lp, grab * (1.0f + 0.7f * phase), IM_COL32(255, 214, 140, static_cast<int>(190.0f * (1.0f - phase))), 40, 2.2f * ui);
         }
-        dl->AddCircleFilled(lp, grab, IM_COL32(255, 196, 90, active ? 70 : 34), 36);
-        dl->AddCircle(lp, grab, IM_COL32(255, 214, 140, active ? 255 : 190), 36, active ? 2.4f * ui : 1.6f * ui);
-        dl->AddCircleFilled(lp, 8.5f * ui, IM_COL32(40, 28, 10, 200), 22);
-        dl->AddCircleFilled(lp, 6.5f * ui, IM_COL32(255, 248, 224, 255), 20);
-        if (!app.lightMoved && !app.draggingLight) drawDragHint(dl, app, lp, grab);
+        if (app.kind == vis::SceneKind::Dungeon) {
+            if (active) dl->AddCircle(lp, grab, IM_COL32(255, 214, 140, 200), 36, 1.6f * ui);
+            drawHero(dl, app, lp);
+            if (!app.walked && !app.draggingLight) drawDragHint(dl, app, lp, grab, "Arrow keys to walk");
+        } else {
+            dl->AddCircleFilled(lp, grab, IM_COL32(255, 196, 90, active ? 70 : 34), 36);
+            dl->AddCircle(lp, grab, IM_COL32(255, 214, 140, active ? 255 : 190), 36, active ? 2.4f * ui : 1.6f * ui);
+            dl->AddCircleFilled(lp, 8.5f * ui, IM_COL32(40, 28, 10, 200), 22);
+            dl->AddCircleFilled(lp, 6.5f * ui, IM_COL32(255, 248, 224, 255), 20);
+            if (!app.lightMoved && !app.draggingLight) drawDragHint(dl, app, lp, grab);
+        }
     }
 
     if (app.outline && app.result.polygon.size() >= 3) {

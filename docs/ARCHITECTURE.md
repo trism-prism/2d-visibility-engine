@@ -386,7 +386,7 @@ core/                               static library viscore (standard library onl
   grid.*      uniform grid (CSR cell lists) and the DDA walker
   scene.*     walls, grid, crossings, targets, edit operations
   visibility.* computeVisibility, Trace, statistics
-  scenes.*    deterministic demo and stress scene generators, light placement
+  scenes.*    deterministic scene generators (the app's scenes and the benchmark's stress layouts), light placement
 app/                                vis_app: GLFW + Dear ImGui front end
   main.cpp    window, command-line flags, frame loop, cursors, capture
   app.*       application state, input, queries, work-meter counters, script fields

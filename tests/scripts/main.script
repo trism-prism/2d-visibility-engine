@@ -200,23 +200,23 @@ expect walls == 55
 expect probe_cells >= 0
 key 1
 wait 2
-expect scene == scatter
+expect scene == forest
 expect probe_walls >= 1
 key 2
 wait 2
-expect scene == maze
+expect scene == dungeon
 expect probe_cells >= 0
 key Tab
 wait 2
 expect mode == brute
-expect probe_walls == 1004
+expect probe_walls == 222
 key 3
 wait 2
-expect scene == longwalls
-expect probe_walls == 1004
+expect scene == crisscross
+expect probe_walls == 44
 key 4
 wait 2
-expect scene == cluster
+expect scene == storeroom
 expect probe_walls == 1004
 key C
 wait 2
@@ -250,27 +250,46 @@ key R
 expect walls == 55
 expect light_x == 610
 
-# --- stress scenes via 1-4: at least 1000 walls each
+# --- the scenes via 1-4, at the default size of 1000: Forest 996 (six walls per tree), the fixed
+# Dungeon, Crisscross 40 (one long wall per 25), Storeroom 1000 (four per crate)
 key 1
 wait 4
 log
-expect scene == scatter
-expect walls >= 1000
+expect scene == forest
+expect walls == 996
 key 2
 wait 4
 log
-expect scene == maze
-expect walls >= 1000
+expect scene == dungeon
+expect walls == 218
 key 3
 wait 4
 log
-expect scene == longwalls
-expect walls >= 1000
+expect scene == crisscross
+expect walls == 40
 key 4
 wait 4
 log
-expect scene == cluster
-expect walls >= 1000
+expect scene == storeroom
+expect walls == 1000
+
+# --- walking: in the Dungeon the arrow keys move the hero (the light), and walls stop it
+key 2
+wait 3
+save hx light_x
+hold Right on
+wait 20
+hold Right off
+wait 2
+expect light_x > $hx
+save hx light_x
+# straight up from (940, 280) runs into the pillar at (920, 170): stopped at its edge plus the radius
+hold Up on
+wait 200
+hold Up off
+wait 2
+expect light_y > 190
+expect light_y < 203
 key R
 expect walls == 55
 
@@ -336,11 +355,11 @@ expect meter_grid == $g
 print rays walls_total meter_baseline meter_grid meter_source
 
 # --- the same on a 1000-wall scene, driven by the scene card
-move @Scatter
+move @Forest
 down left
 up left
 wait 5
-expect scene == scatter
+expect scene == forest
 save prod1 rays_x_walls
 save wt1 wall_tests
 expect meter_baseline == $prod1
@@ -357,11 +376,12 @@ print scene rays walls_total meter_baseline meter_grid meter_source meter_verdic
 key Tab
 wait 3
 
-# --- slow-scene note: Long walls under "All walls"
+# --- slow-scene note: a 5,000-wall Forest under "All walls"
 set mode brute
-key 3
+set walls 5000
+key 1
 wait 4
-expect scene == longwalls
+expect scene == forest
 expect slow_note == yes
 expect slow_ms > 30
 expect slow_text has slow here
@@ -386,12 +406,13 @@ expect panel_overflow == no
 set mode grid
 key 4
 wait 5
-expect scene == cluster
+expect scene == storeroom
 expect panel_overflow == no
 set mode brute
 key R
 wait 4
 expect slow_note == no
+set walls 1000
 set mode grid
 wait 3
 
@@ -478,15 +499,15 @@ down left
 up left
 wait 5
 expect tour_step == 5
-expect scene == scatter
-expect walls == 1000
+expect scene == forest
+expect walls == 996
 expect mode == grid
 move @Next
 down left
 up left
 wait 5
 expect tour_step == 6
-expect scene == cluster
+expect scene == storeroom
 move @Next
 down left
 up left

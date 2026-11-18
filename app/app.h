@@ -24,7 +24,9 @@ struct SceneInfo {
     vis::SceneKind kind;
     const char* name;
     const char* blurb;
-    const char* key;  // keyboard shortcut
+    const char* key;    // keyboard shortcut
+    const char* about;  // two plain sentences: what the scene is, and what to notice
+    bool sized;         // the Walls slider changes it (false: a fixed layout)
 };
 const SceneInfo& sceneInfo(vis::SceneKind k);
 const SceneInfo* sceneInfos(int& count);  // in panel order
@@ -103,6 +105,9 @@ struct App {
     vis::SceneKind kind = vis::SceneKind::Demo;
     int stressWalls = 1000;
     int seed = 1;
+    float fixedDt = 0.0f;  // > 0: walking uses this step per frame instead of real time (scripts, captures)
+    bool walked = false;   // the arrow keys have moved the light once: the Dungeon hint goes away
+    int facing = 1;        // the hero's facing, -1 left / +1 right (last sideways step)
     bool autoGrid = true;
     int gridCols = 10, gridRows = 6;
 
@@ -172,6 +177,7 @@ struct App {
     void cycleOverlay();
     void cancelWall();
     void setLight(vis::Vec2 p);
+    void walk(vis::Vec2 dir, float dt);  // arrow keys / WASD: move the light, blocked by walls
     void setStatus(const std::string& msg, bool error);
     void markDirty() { dirty = true; }
     void sceneChanged();                // scene edited or replaced: stats and grid info are stale

@@ -54,7 +54,7 @@ void methodCard(App& app) {
     const ImU32 accents[] = {kAmber, kCyan};
     const int clicked = methodCards(app, titles, subs, accents, 2, app.mode == vis::Mode::Brute ? 0 : 1);
     if (clicked >= 0) app.setMode(clicked == 0 ? vis::Mode::Brute : vis::Mode::Grid);
-    cardTextSmall(app, kTextDim, "Same picture, different amount of work.");
+    cardTextSmall(app, kTextDim, "Grid cuts the floor into squares. A ray only checks walls in the squares it passes. Same picture, less work.");
     cardEnd(app);
 }
 
@@ -76,6 +76,8 @@ void scenesCard(App& app) {
     const SceneInfo* infos = sceneInfos(n);
     for (int i = 0; i < n; ++i)
         if (sceneRow(app, infos[i].name, infos[i].blurb, infos[i].key, app.kind == infos[i].kind)) app.loadScene(infos[i].kind);
+    const SceneInfo& current = sceneInfo(app.kind);
+    if (current.about[0] != '\0') cardTextSmall(app, IM_COL32(204, 212, 230, 255), "%s", current.about);
 
     int idx = nearestStop(app.stressWalls);
     // "Walls" caption, slider, value: the value sits outside the track so the grab never covers it.
@@ -85,14 +87,20 @@ void scenesCard(App& app) {
     ImGui::TextUnformatted("Walls");
     ImGui::SameLine();
     ImGui::SetNextItemWidth(cardWidth() - capW - valW - 2.0f * sp);
+    ImGui::BeginDisabled(!current.sized);
     if (ImGui::SliderInt("##walls", &idx, 0, kWallStopCount - 1, " ", ImGuiSliderFlags_NoInput)) app.stressWalls = kWallStops[idx];
     const bool slid = ImGui::IsItemDeactivatedAfterEdit();
-    tooltip("Walls to generate (100-5,000), rebuilt on release.");
-    if (slid && app.kind != vis::SceneKind::Demo) app.loadScene(app.kind);
+    const bool sliding = ImGui::IsItemActive();
+    ImGui::EndDisabled();
+    if (current.sized) tooltip(app.kind == vis::SceneKind::Crisscross ? "Scene size: one long wall per 25 on the slider (100-5,000). Rebuilds when you let go."
+                                                                  : "How many walls to build the scene from (100-5,000). Rebuilds when you let go.");
+    else tooltip("This scene has a fixed layout. The number is how many walls it has.");
+    if (slid && current.sized) app.loadScene(app.kind);
 
     ImGui::SameLine();
     ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted(fmtInt(static_cast<std::uint64_t>(app.stressWalls)).c_str());
+    // While dragging: the size you are picking. Otherwise: the walls actually in the room.
+    ImGui::TextUnformatted(fmtInt(static_cast<std::uint64_t>(sliding ? app.stressWalls : static_cast<int>(app.scene.userWallCount()))).c_str());
     const float half = (cardWidth() - sp) * 0.5f;
     if (button(app, "Clear", {half, 0})) app.clearWalls();
     tooltip("Wipe all walls (C).");
@@ -107,7 +115,7 @@ void scenesCard(App& app) {
         ImGui::SameLine();
         ImGui::SetNextItemWidth(cardWidth() * 0.4f);
         if (ImGui::InputInt("##seed", &app.seed, 0)) app.seed = std::max(app.seed, 0);
-        if (ImGui::IsItemDeactivatedAfterEdit() && app.kind != vis::SceneKind::Demo) app.loadScene(app.kind);
+        if (ImGui::IsItemDeactivatedAfterEdit() && current.sized) app.loadScene(app.kind);
     }
 
     const std::string note = app.slowNote();
@@ -204,7 +212,7 @@ void App::drawStatusLine() {
     if (now < statusUntil && !status.empty()) {
         ImGui::TextColored(statusIsError ? ImVec4(1.0f, 0.55f, 0.45f, 1) : ImVec4(0.55f, 0.85f, 1.0f, 1), "%s", status.c_str());
     } else {
-        ImGui::TextDisabled("Tab method \u00B7 O show \u00B7 1-4 scenes \u00B7 R reset \u00B7 C clear");
+        ImGui::TextDisabled("Tab method \u00B7 O show \u00B7 1-4 scenes \u00B7 arrows walk \u00B7 R reset \u00B7 C clear");
     }
     ImGui::End();
     ImGui::PopStyleColor();

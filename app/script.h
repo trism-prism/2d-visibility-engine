@@ -10,7 +10,8 @@
 //   move X Y | move @Button Label | wmove X Y   mouse position: window pixels / panel button centre /
 //                                                world coordinates (through the app's real transform)
 //   down left|right, up left|right               mouse buttons
-//   key Tab|R|C|O|M|1|2|3|4|Escape               press and release
+//   key Tab|R|C|O|M|1|2|3|4|Escape|Left|Right|Up|Down   press and release
+//   hold KEY on|off                              hold / release a key (walk the light with arrows)
 //   shift on|off                                 hold / release Shift (snap while drawing)
 //   wait N                                       N frames
 //   capture file.bmp                             save the framebuffer of the current frame
