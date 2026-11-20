@@ -4,7 +4,7 @@ Both videos are recorded from the real app, nothing is mocked up.
 
 | File | Length | What it is |
 |---|---|---|
-| [walkthrough.mp4](walkthrough.mp4) | 4:57, 1920 x 1080 | The full walkthrough. I explain in plain words what the engine does, how the two methods work, and what each scene shows. This is the one to share on a portfolio or LinkedIn |
+| [walkthrough.mp4](walkthrough.mp4) | 5:43, 1920 x 1080 | The full walkthrough. I explain in plain words what the engine does, how the two methods work, and what each scene shows. This is the one to share on a portfolio or LinkedIn |
 | [demo_short.mp4](demo_short.mp4) | 0:56, 1920 x 1080 | A quick tour with short labels |
 | [demo_short.gif](demo_short.gif) | 0:56, 800 px wide | The same short tour as a GIF (it's the one at the top of the README) |
 
