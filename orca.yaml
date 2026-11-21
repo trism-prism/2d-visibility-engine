@@ -1,0 +1,7 @@
+# orca.yaml: Orca reads this at the repo root when it creates a worktree.
+# scripts.setup runs once per new worktree. Keep it idempotent and fast; never put secrets here.
+# Gitignored files a worktree needs (.env*) are listed in .worktreeinclude (literal paths, one per line).
+# scripts/dev.ps1 loads the MSVC x64 developer environment (VS Build Tools 2022) for the one command.
+scripts:
+  setup: |
+    pwsh -NoProfile -File scripts/dev.ps1 cmake --preset release
